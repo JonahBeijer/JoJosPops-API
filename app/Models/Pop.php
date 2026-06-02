@@ -2,28 +2,45 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Pop extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
+        'user_id',
+        'image_emoji',
         'title',
         'neighbourhood',
         'location',
+        'latitude',
+        'longitude',
         'genre',
+        'description',
+        'capacity',
+        'current_guests',
         'date',
-        'time',
+        'event_time',
         'access',
         'event_type',
-        'reveal_time'
+        'images', // Holds array structures perfectly via the cast mapping below
+        'reveal_time',
     ];
 
     protected $casts = [
         'reveal_time' => 'datetime',
-        'date' => 'date',
+        'latitude' => 'float',
+        'longitude' => 'float',
+        'date' => 'date:Y-m-d',
+        'images' => 'array', // 👈 ADD THIS: Converts JSON database rows natively into clean PHP Arrays
     ];
 
+    public function user()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'user_id');
+    }
+
+    public function requests()
+    {
+        return $this->hasMany(PopRequest::class, 'pop_id');
+    }
 }

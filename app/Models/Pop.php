@@ -22,8 +22,11 @@ class Pop extends Model
         'event_time',
         'access',
         'event_type',
-        'images', // Holds array structures perfectly via the cast mapping below
+        'images',
         'reveal_time',
+        // 👇 NIEUW: Voeg deze twee toe!
+        'is_ticketed',
+        'ticket_price',
     ];
 
     protected $casts = [
@@ -31,7 +34,10 @@ class Pop extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'date' => 'date:Y-m-d',
-        'images' => 'array', // 👈 ADD THIS: Converts JSON database rows natively into clean PHP Arrays
+        'images' => 'array',
+        // 👇 NIEUW: Zorg dat de datatypes altijd kloppen
+        'is_ticketed' => 'boolean',
+        'ticket_price' => 'decimal:2',
     ];
 
     public function user()

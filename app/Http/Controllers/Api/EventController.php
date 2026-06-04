@@ -117,6 +117,8 @@ class EventController extends Controller
             'access'        => 'nullable|string',
             'reveal_time'   => 'nullable|date',
             'images'        => 'nullable|array',
+            'is_ticketed'   => 'nullable|boolean',
+            'ticket_price'  => 'nullable|numeric',
         ]);
 
         // 4. Afbeeldingen verwerken indien er nieuwe worden geüpload
@@ -195,6 +197,8 @@ class EventController extends Controller
             'access'        => 'nullable|string',
             'reveal_time'   => 'nullable|date',
             'images'        => 'nullable|array', // Valideer binnenkomend als array
+            'is_ticketed'   => 'nullable|boolean',
+            'ticket_price'  => 'nullable|numeric',
         ]);
 
         $validated['user_id'] = $request->user()->id;

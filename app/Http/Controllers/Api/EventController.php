@@ -22,7 +22,7 @@ class EventController extends Controller
             ->map(function ($event) {
                 return $this->maskSensitiveData($event);
             })
-            ->all(); // 👈 Omgezet naar pure array om JSON serialisatie-crashes te voorkomen
+            ->all();
 
         return response()->json($events);
     }
@@ -43,7 +43,7 @@ class EventController extends Controller
     }
 
     /**
-     * Ticket kopen via Stripe Connect (15% commissie voor JoJo's)
+     * Ticket kopen via Stripe (Tijdelijk zonder Connect splitsing voor testen)
      */
     public function buyTicket(Request $request, $id)
     {
@@ -56,27 +56,24 @@ class EventController extends Controller
         }
 
         // 3. Configureer Stripe met jouw geheime sleutel uit de .env file
-        \Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
+        Stripe::setApiKey(env('STRIPE_SECRET'));
 
         // 4. Reken de prijs om naar centen (Stripe vereist dit) en bereken de 15% commissie
         $ticketPriceInCents = (int) round($pop->ticket_price * 100);
-        $applicationFeeInCents = (int) round($ticketPriceInCents * 0.15); // Jouw 15% winst!
+        $applicationFeeInCents = (int) round($ticketPriceInCents * 0.15);
 
         try {
             // 5. Maak de Payment Intent aan bij Stripe
-            $paymentIntent = \Stripe\PaymentIntent::create([
+            $paymentIntent = PaymentIntent::create([
                 'amount' => $ticketPriceInCents,
                 'currency' => 'eur',
                 'automatic_payment_methods' => ['enabled' => true],
 
-                // 🔥 Jouw 15% die direct naar de JoJo's bankrekening gaat
-                'application_fee_amount' => $applicationFeeInCents,
-
-                // 💸 De overige 85% gaat naar de Stripe account van de maker
-                'transfer_data' => [
-                    // LET OP: Je moet zorgen dat de maker een gekoppeld Stripe ID in de database heeft
-                    'destination' => $pop->user->stripe_account_id,
-                ],
+                // ⚠️ TIJDELIJK UITGEZET VOOR TESTEN (Voorkomt crash op missend stripe_account_id):
+                // 'application_fee_amount' => $applicationFeeInCents,
+                // 'transfer_data' => [
+                //     'destination' => $pop->user->stripe_account_id,
+                // ],
             ]);
 
             // 6. Stuur het secret terug naar de Expo app
@@ -94,15 +91,12 @@ class EventController extends Controller
 
     public function update(Request $request, $id)
     {
-        // 1. Zoek de pop-up op (gooit automatisch 404 als hij niet bestaat)
         $pop = Pop::findOrFail($id);
 
-        // 2. BEVEILIGINGSCHECK: Is de ingelogde gebruiker wel de host?
         if ($pop->user_id !== $request->user()->id) {
             return response()->json(['message' => 'Unauthorized. You do not own this pop-up.'], 403);
         }
 
-        // 3. Valideer de binnenkomende gegevens (bijna gelijk aan je store methode)
         $validated = $request->validate([
             'title'         => 'sometimes|required|string|max:255',
             'neighbourhood' => 'sometimes|required|string',
@@ -121,9 +115,7 @@ class EventController extends Controller
             'ticket_price'  => 'nullable|numeric',
         ]);
 
-        // 4. Afbeeldingen verwerken indien er nieuwe worden geüpload
         if ($request->hasFile('images')) {
-            // Optioneel: Verwijder oude afbeeldingen uit de storage om ruimte te besparen
             if (!empty($pop->images)) {
                 foreach ($pop->images as $oldPath) {
                     Storage::disk('public')->delete($oldPath);
@@ -138,7 +130,6 @@ class EventController extends Controller
             $validated['images'] = $storedPaths;
         }
 
-        // 5. Update de database rij
         $pop->update($validated);
 
         return response()->json([
@@ -146,25 +137,22 @@ class EventController extends Controller
             'event' => $pop
         ], 200);
     }
+
     public function destroy(Request $request, $id)
     {
-        // 1. Zoek de pop-up op
         $pop = Pop::findOrFail($id);
 
-        // 2. BEVEILIGINGSCHECK: Mag deze gebruiker dit wel doen?
         if ($pop->user_id !== $request->user()->id) {
             return response()->json(['message' => 'Unauthorized. You do not own this pop-up.'], 403);
         }
 
         try {
-            // 3. Schoonmaak: Verwijder de fysieke afbeeldingen van de server/storage
             if (!empty($pop->images)) {
                 foreach ($pop->images as $path) {
                     Storage::disk('public')->delete($path);
                 }
             }
 
-            // 4. Verwijder de pop-up uit de database
             $pop->delete();
 
             return response()->json([
@@ -178,8 +166,9 @@ class EventController extends Controller
             ], 500);
         }
     }
+
     /**
-     * Nieuwe pop-up opslaan (Geüpdatet voor multi-image verwerking)
+     * Nieuwe pop-up opslaan
      */
     public function store(Request $request)
     {
@@ -196,24 +185,21 @@ class EventController extends Controller
             'event_time'    => 'nullable|string',
             'access'        => 'nullable|string',
             'reveal_time'   => 'nullable|date',
-            'images'        => 'nullable|array', // Valideer binnenkomend als array
+            'images'        => 'nullable|array',
             'is_ticketed'   => 'nullable|boolean',
             'ticket_price'  => 'nullable|numeric',
         ]);
 
         $validated['user_id'] = $request->user()->id;
 
-        // Verwerk meerdere afbeeldingen indien aanwezig
         if ($request->hasFile('images')) {
             $storedPaths = [];
 
-            // Loop door elk bestand in de images[] array
             foreach ($request->file('images') as $file) {
                 $path = $file->store('pops', 'public');
                 $storedPaths[] = $path;
             }
 
-            // Paden opslaan (wordt automatisch JSON via de cast in het Model)
             $validated['images'] = $storedPaths;
         }
 
@@ -258,7 +244,7 @@ class EventController extends Controller
             ->map(function($event) {
                 return $this->maskSensitiveData($event);
             })
-            ->all(); // 👈 Ook hier naar pure array omgezet voor stabiliteit
+            ->all();
 
         return response()->json($pops);
     }
@@ -279,7 +265,6 @@ class EventController extends Controller
         $urls = [];
 
         if (!empty($event->images)) {
-            // Veiligheidscheck: als het stiekem nog een string is uit een oude migratie, zet het om naar een array
             $imagesArray = is_array($event->images)
                 ? $event->images
                 : (json_decode($event->images, true) ?? [$event->images]);
@@ -291,7 +276,6 @@ class EventController extends Controller
             }
         }
 
-        // Voeg het dynamische veld toe met volledige URLs voor je React Native Image componenten
         $event->image_urls = $urls;
 
         return $event;

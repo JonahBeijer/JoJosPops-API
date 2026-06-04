@@ -23,7 +23,8 @@ class User extends Authenticatable
         'username',
         'email',
         'password',
-        'profile_image'
+        'profile_image',
+        'stripe_account_id'
     ];
 
     /**

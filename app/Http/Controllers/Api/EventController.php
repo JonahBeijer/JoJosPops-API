@@ -45,6 +45,9 @@ class EventController extends Controller
     /**
      * Ticket kopen via Stripe (Tijdelijk zonder Connect splitsing voor testen)
      */
+    /**
+     * Ticket kopen via Stripe met ondersteuning voor meerdere betaalmethoden
+     */
     public function buyTicket(Request $request, $id)
     {
         // 1. Zoek de pop en laad de bijbehorende host (user) in
@@ -63,11 +66,21 @@ class EventController extends Controller
         $applicationFeeInCents = (int) round($ticketPriceInCents * 0.15);
 
         try {
-            // 5. Maak de Payment Intent aan bij Stripe
+            // 5. Maak de Payment Intent aan bij Stripe met alle gewenste betaalmethoden
             $paymentIntent = PaymentIntent::create([
                 'amount' => $ticketPriceInCents,
                 'currency' => 'eur',
-                'automatic_payment_methods' => ['enabled' => true],
+
+                // Alle ondersteunde betaalmethoden expliciet gedefinieerd volgens Stripe API standaarden:
+                'payment_method_types' => [
+                    'card',
+                    'ideal',
+                    'klarna',
+                    'bancontact',
+                    'satispay',
+                    'amazon_pay',
+                    'eps'
+                ],
 
                 // ⚠️ TIJDELIJK UITGEZET VOOR TESTEN (Voorkomt crash op missend stripe_account_id):
                 // 'application_fee_amount' => $applicationFeeInCents,

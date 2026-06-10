@@ -15,19 +15,14 @@ class EventController extends Controller
     public function index()
     {
         $events = Pop::where('is_active', true)
-            ->with([
-                'user' => function ($query) {
-                    $query->select(
-                        'id',
-                        'name',
-                        'username',
-                        'profile_image'
-                    );
-                }
-            ])
+            ->with(['user' => function($query) {
+                $query->select('id', 'name', 'username', 'profile_image');
+            }])
             ->orderBy('date', 'asc')
             ->get()
-            ->map(fn($event) => $this->maskSensitiveData($event))
+            ->map(function ($event) {
+                return $this->maskSensitiveData($event);
+            })
             ->all();
 
         return response()->json($events);
@@ -36,21 +31,17 @@ class EventController extends Controller
     public function show($id)
     {
         $event = Pop::where('is_active', true)
-            ->with([
-                'user' => function ($query) {
-                    $query->select(
-                        'id',
-                        'name',
-                        'username',
-                        'profile_image'
-                    );
-                }
-            ])
+            ->with(['user' => function($query) {
+                $query->select('id', 'name', 'username', 'profile_image');
+            }])
             ->findOrFail($id);
+
+        $revealTime = Carbon::parse($event->reveal_time);
+        $isRevealed = now()->gt($revealTime);
 
         return response()->json([
             'event' => $this->maskSensitiveData($event),
-            'is_revealed' => now()->gt(Carbon::parse($event->reveal_time))
+            'is_revealed' => $isRevealed
         ]);
     }
 
@@ -62,17 +53,19 @@ class EventController extends Controller
 
         if (!$pop->is_ticketed || !$pop->ticket_price) {
             return response()->json([
-                'message' => 'Dit event is gratis of ongeldig.'
+                'message' => 'Dit event is gratis of heeft geen geldige prijs.'
             ], 400);
         }
 
         Stripe::setApiKey(env('STRIPE_SECRET'));
 
+        $ticketPriceInCents = (int) round($pop->ticket_price * 100);
+        $applicationFeeInCents = (int) round($ticketPriceInCents * 0.15);
+
         try {
 
             $paymentIntent = PaymentIntent::create([
-                'amount' => (int) round($pop->ticket_price * 100),
-
+                'amount' => $ticketPriceInCents,
                 'currency' => 'eur',
 
                 'payment_method_types' => [
@@ -83,18 +76,108 @@ class EventController extends Controller
                     'satispay',
                     'amazon_pay',
                     'eps'
-                ]
+                ],
             ]);
 
             return response()->json([
-                'paymentIntent' =>
-                    $paymentIntent->client_secret
-            ]);
+                'paymentIntent' => $paymentIntent->client_secret
+            ], 200);
 
         } catch (\Exception $e) {
 
             return response()->json([
-                'message' => 'Betaling mislukt',
+                'message' => 'Fout bij het opzetten van de betaling.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function update(Request $request, $id)
+    {
+        $pop = Pop::findOrFail($id);
+
+        if ($pop->user_id !== $request->user()->id) {
+            return response()->json([
+                'message' => 'Unauthorized. You do not own this pop-up.'
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'title' => 'sometimes|required|string|max:255',
+            'neighbourhood' => 'sometimes|required|string',
+            'description' => 'nullable|string',
+            'location' => 'nullable|string',
+            'latitude' => 'sometimes|required|numeric',
+            'longitude' => 'sometimes|required|numeric',
+            'capacity' => 'nullable|integer',
+            'event_type' => 'nullable|string',
+            'date' => 'nullable|date',
+            'event_time' => 'nullable|string',
+            'access' => 'nullable|string',
+            'reveal_time' => 'nullable|date',
+            'images' => 'nullable|array',
+            'is_ticketed' => 'nullable|boolean',
+            'ticket_price' => 'nullable|numeric',
+        ]);
+
+        if ($request->hasFile('images')) {
+
+            if (!empty($pop->images)) {
+                foreach ($pop->images as $oldPath) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
+
+            $storedPaths = [];
+
+            foreach ($request->file('images') as $file) {
+                $path = $file->store('pops', 'public');
+                $storedPaths[] = $path;
+            }
+
+            $validated['images'] = $storedPaths;
+        }
+
+        if (isset($validated['access'])) {
+            $validated['is_active'] = $pop->is_active ?? true;
+        }
+
+        $pop->update($validated);
+
+        return response()->json([
+            'message' => 'Pop-up successfully updated! ✏️',
+            'event' => $pop
+        ]);
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        $pop = Pop::findOrFail($id);
+
+        if ($pop->user_id !== $request->user()->id) {
+            return response()->json([
+                'message' => 'Unauthorized. You do not own this pop-up.'
+            ], 403);
+        }
+
+        try {
+
+            if (!empty($pop->images)) {
+                foreach ($pop->images as $path) {
+                    Storage::disk('public')->delete($path);
+                }
+            }
+
+            $pop->delete();
+
+            return response()->json([
+                'message' => 'Pop-up successfully deleted! 🗑️'
+            ], 200);
+
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'message' => 'Failed to delete pop-up.',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -120,26 +203,21 @@ class EventController extends Controller
             'ticket_price' => 'nullable|numeric',
         ]);
 
-        $validated['user_id'] =
-            $request->user()->id;
+        $validated['user_id'] = $request->user()->id;
 
-        $validated['is_active'] =
-            !in_array(
-                strtolower($validated['access'] ?? ''),
-                ['premium', 'premium only']
-            )
-            || $request->user()->is_premium;
+        // NIEUW
+        $validated['is_active'] = true;
 
         if ($request->hasFile('images')) {
 
-            $stored = [];
+            $storedPaths = [];
 
             foreach ($request->file('images') as $file) {
-                $stored[] =
-                    $file->store('pops', 'public');
+                $path = $file->store('pops', 'public');
+                $storedPaths[] = $path;
             }
 
-            $validated['images'] = $stored;
+            $validated['images'] = $storedPaths;
         }
 
         if (empty($validated['reveal_time'])) {
@@ -149,172 +227,80 @@ class EventController extends Controller
         $event = Pop::create($validated);
 
         return response()->json([
-            'message' =>
-                'Pop-up succesvol geplaatst 🚀',
+            'message' => 'Pop-up successfully dropped! 🚀',
             'event' => $event
         ], 201);
     }
 
-    public function update(Request $request, $id)
-    {
-        $pop = Pop::findOrFail($id);
-
-        if (
-            $pop->user_id !==
-            $request->user()->id
-        ) {
-            return response()->json([
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'title' => 'sometimes|string',
-            'access' => 'nullable|string',
-            'images' => 'nullable|array',
-        ]);
-
-        if (isset($validated['access'])) {
-
-            $validated['is_active'] =
-                !in_array(
-                    strtolower($validated['access']),
-                    ['premium', 'premium only']
-                )
-                || $request->user()->is_premium;
-        }
-
-        if ($request->hasFile('images')) {
-
-            foreach (($pop->images ?? []) as $old) {
-                Storage::disk('public')
-                    ->delete($old);
-            }
-
-            $stored = [];
-
-            foreach ($request->file('images') as $file) {
-                $stored[] =
-                    $file->store(
-                        'pops',
-                        'public'
-                    );
-            }
-
-            $validated['images'] = $stored;
-        }
-
-        $pop->update($validated);
-
-        return response()->json([
-            'message' =>
-                'Pop bijgewerkt',
-            'event' => $pop
-        ]);
-    }
-
-    public function destroy(Request $request, $id)
-    {
-        $pop = Pop::findOrFail($id);
-
-        if (
-            $pop->user_id !==
-            $request->user()->id
-        ) {
-            return response()->json([
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-
-        foreach (($pop->images ?? []) as $img) {
-            Storage::disk('public')
-                ->delete($img);
-        }
-
-        $pop->delete();
-
-        return response()->json([
-            'message' =>
-                'Pop verwijderd'
-        ]);
-    }
-
     public function nearby(Request $request)
     {
+        $request->validate([
+            'lat' => 'required|numeric',
+            'lng' => 'required|numeric',
+        ]);
+
         $lat = $request->lat;
         $lng = $request->lng;
-
-        $radius =
-            $request->radius ?? 10;
+        $radius = $request->radius ?? 10;
 
         $pops = Pop::where('is_active', true)
-            ->with('user')
+            ->with(['user' => function($query) {
+                $query->select('id', 'name', 'username', 'profile_image');
+            }])
             ->selectRaw("
-                *,
-                (
-                    6371 *
-                    acos(
-                        cos(radians(?))
-                        *
-                        cos(radians(latitude))
-                        *
-                        cos(
-                            radians(longitude)
-                            -
-                            radians(?)
-                        )
-                        +
-                        sin(radians(?))
-                        *
-                        sin(
-                            radians(latitude)
-                        )
-                    )
-                ) as distance
-            ", [$lat, $lng, $lat])
-            ->having(
-                'distance',
-                '<',
-                $radius
-            )
-            ->orderBy('distance')
+            *,
+            (6371 * acos(
+                cos(radians(?)) *
+                cos(radians(latitude)) *
+                cos(radians(longitude) - radians(?)) +
+                sin(radians(?)) *
+                sin(radians(latitude))
+            )) AS distance
+        ", [$lat, $lng, $lat])
+            ->having("distance", "<", $radius)
+            ->orderBy("distance")
             ->get()
-            ->map(
-                fn($e)
-                =>
-                $this->maskSensitiveData($e)
-            );
+            ->map(function($event) {
+                return $this->maskSensitiveData($event);
+            })
+            ->all();
 
         return response()->json($pops);
     }
 
     private function maskSensitiveData($event)
     {
-        if (
-            now()->lt(
-                Carbon::parse(
-                    $event->reveal_time
-                )
-            )
-        ) {
+        $revealTime = Carbon::parse($event->reveal_time);
+
+        if (now()->lt($revealTime)) {
             $event->location =
-                'Location locked';
+                "Location locked until " .
+                $revealTime->format('H:i');
+        } else {
+            $event->location =
+                $event->location ??
+                $event->neighbourhood;
         }
 
-        $event->image_urls = [];
+        $urls = [];
 
-        foreach (
-            (array) $event->images
-            as $img
-        ) {
+        if (!empty($event->images)) {
 
-            if ($img) {
-                $event->image_urls[] =
-                    asset(
-                        'storage/' . $img
-                    );
+            $imagesArray =
+                is_array($event->images)
+                    ? $event->images
+                    : (json_decode($event->images, true)
+                    ?? [$event->images]);
+
+            foreach ($imagesArray as $path) {
+                if ($path) {
+                    $urls[] =
+                        asset('storage/' . $path);
+                }
             }
         }
+
+        $event->image_urls = $urls;
 
         return $event;
     }

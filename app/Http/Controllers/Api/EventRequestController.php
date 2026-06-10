@@ -63,14 +63,19 @@ class EventRequestController extends Controller
 
     public function confirmPayment(Request $request, $popId)
     {
-        $popRequest = PopRequest::where('pop_id', $popId)
-            ->where('user_id', $request->user()->id)
-            ->firstOrFail();
+        $userId = $request->user()->id;
 
-        // Zet de status expliciet naar 'paid'
-        $popRequest->update(['status' => 'paid']);
+        // We gebruiken updateOrCreate: als er nog geen request is, maak hem aan.
+        // Als hij er wel is, update de status naar 'paid'.
+        $popRequest = PopRequest::updateOrCreate(
+            ['pop_id' => $popId, 'user_id' => $userId],
+            ['status' => 'paid']
+        );
 
-        return response()->json(['message' => 'Betaling geregistreerd als paid']);
+        return response()->json([
+            'message' => 'Betaling succesvol verwerkt',
+            'status' => $popRequest->status // Dit zou nu 'paid' moeten zijn
+        ]);
     }
 
     /**

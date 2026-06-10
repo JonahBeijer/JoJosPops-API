@@ -288,25 +288,7 @@ class EventController extends Controller
         return response()->json($pops);
     }
 
-    public function confirmTicket(Request $request, $id)
-    {
-        $user = $request->user();
-
-        // Zoek het verzoek van deze gebruiker voor dit event
-        $popRequest = PopRequest::where('pop_id', $id)
-            ->where('user_id', $user->id)
-            ->first();
-
-        if (!$popRequest) {
-            return response()->json(['message' => 'Geen verzoek gevonden.'], 404);
-        }
-
-        // Update de status naar 'paid'
-        $popRequest->status = 'paid';
-        $popRequest->save();
-
-        return response()->json(['message' => 'Betaling bevestigd!']);
-    }
+    
 
     private function maskSensitiveData($event)
     {

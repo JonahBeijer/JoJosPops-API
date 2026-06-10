@@ -24,9 +24,13 @@ class Pop extends Model
         'event_type',
         'images',
         'reveal_time',
-        // 👇 NIEUW: Voeg deze twee toe!
+
+        // Tickets
         'is_ticketed',
         'ticket_price',
+
+        // Premium activatie
+        'is_active',
     ];
 
     protected $casts = [
@@ -35,18 +39,35 @@ class Pop extends Model
         'longitude' => 'float',
         'date' => 'date:Y-m-d',
         'images' => 'array',
-        // 👇 NIEUW: Zorg dat de datatypes altijd kloppen
+
         'is_ticketed' => 'boolean',
         'ticket_price' => 'decimal:2',
+
+        // Premium activatie
+        'is_active' => 'boolean',
     ];
 
     public function user()
     {
-        return $this->belongsTo(\App\Models\User::class, 'user_id');
+        return $this->belongsTo(
+            \App\Models\User::class,
+            'user_id'
+        );
     }
 
     public function requests()
     {
-        return $this->hasMany(PopRequest::class, 'pop_id');
+        return $this->hasMany(
+            PopRequest::class,
+            'pop_id'
+        );
+    }
+
+    /**
+     * Alleen actieve pops
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
     }
 }

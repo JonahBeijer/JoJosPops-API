@@ -67,15 +67,8 @@ class EventController extends Controller
             $paymentIntent = PaymentIntent::create([
                 'amount' => $ticketPriceInCents,
                 'currency' => 'eur',
-
-                'payment_method_types' => [
-                    'card',
-                    'ideal',
-                    'klarna',
-                    'bancontact',
-                    'satispay',
-                    'amazon_pay',
-                    'eps'
+                'automatic_payment_methods' => [
+                    'enabled' => true,
                 ],
             ]);
 

@@ -15,7 +15,7 @@ class EventController extends Controller
     public function index()
     {
         $events = Pop::with(['user' => function($query) {
-            $query->select('id', 'name', 'username');
+            $query->select('id', 'name', 'username' , 'profile_image');
         }])
             ->orderBy('date', 'asc')
             ->get()
@@ -30,7 +30,7 @@ class EventController extends Controller
     public function show($id)
     {
         $event = Pop::with(['user' => function($query) {
-            $query->select('id', 'name', 'username');
+            $query->select('id', 'name', 'username', 'profile_image');
         }])->findOrFail($id);
 
         $revealTime = Carbon::parse($event->reveal_time);
@@ -240,7 +240,7 @@ class EventController extends Controller
         $radius = $request->radius ?? 10;
 
         $pops = Pop::with(['user' => function($query) {
-            $query->select('id', 'name', 'username');
+            $query->select('id', 'name', 'username' , 'profile_image');
         }])->selectRaw("
             *,
             (6371 * acos(

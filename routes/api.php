@@ -49,6 +49,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return response()->json($request->user());
     });
+    Route::post('/pops/{id}/confirm-payment', [EventRequestController::class, 'confirmPayment']);
+    Route::post('/pops/{id}/confirm-ticket', [EventController::class, 'confirmTicket']);
     Route::post('/profile/sync-premium', [ProfileController::class, 'syncPremium']);
     Route::get('/host/requests/pending', [EventRequestController::class, 'getPendingRequests']);
     Route::post('/pops/{id}/join-request', [EventRequestController::class, 'storeRequest']); // Voor de 'Request to join' knop

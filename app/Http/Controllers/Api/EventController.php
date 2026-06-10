@@ -54,11 +54,11 @@ class EventController extends Controller
                 ->first();
 
             if ($popRequest) {
-                $rsvpStatus = $popRequest->status; // Dit geeft 'requested' of 'accepted' terug
+                // Mapt de database status naar wat de app verwacht
+                $rsvpStatus = $popRequest->status;
 
-                // Als je met tickets werkt, kun je hier checken of de status 'paid' is,
-                // of je checkt een aparte betalingstabel:
-                if ($popRequest->status === 'paid') {
+                // Als de status 'paid' is, zet hasPaid op true
+                if ($rsvpStatus === 'paid') {
                     $hasPaid = true;
                 }
             }
@@ -286,6 +286,26 @@ class EventController extends Controller
             ->all();
 
         return response()->json($pops);
+    }
+
+    public function confirmTicket(Request $request, $id)
+    {
+        $user = $request->user();
+
+        // Zoek het verzoek van deze gebruiker voor dit event
+        $popRequest = PopRequest::where('pop_id', $id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$popRequest) {
+            return response()->json(['message' => 'Geen verzoek gevonden.'], 404);
+        }
+
+        // Update de status naar 'paid'
+        $popRequest->status = 'paid';
+        $popRequest->save();
+
+        return response()->json(['message' => 'Betaling bevestigd!']);
     }
 
     private function maskSensitiveData($event)

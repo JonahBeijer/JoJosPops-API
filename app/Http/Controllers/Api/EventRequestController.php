@@ -61,6 +61,18 @@ class EventRequestController extends Controller
         return response()->json(['requests' => $requests]);
     }
 
+    public function confirmPayment(Request $request, $popId)
+    {
+        $popRequest = PopRequest::where('pop_id', $popId)
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        // Zet de status expliciet naar 'paid'
+        $popRequest->update(['status' => 'paid']);
+
+        return response()->json(['message' => 'Betaling geregistreerd als paid']);
+    }
+
     /**
      * 3. Ophalen van alle verzoeken (pending & accepted) voor één SPECIFIEKE pop-up (Manage Guests pagina)
      */

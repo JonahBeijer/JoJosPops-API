@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Pop;
+use App\Models\PopRequest;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -39,9 +40,35 @@ class EventController extends Controller
         $revealTime = Carbon::parse($event->reveal_time);
         $isRevealed = now()->gt($revealTime);
 
+        // Standaard waarden als de gebruiker niet is ingelogd
+        $rsvpStatus = 'none';
+        $hasPaid = false;
+
+        // Pak de ingelogde API-gebruiker (Pas aan naar auth('sanctum')->user() als je Sanctum gebruikt)
+        $user = auth()->user() ?? auth('sanctum')->user();
+
+        if ($user) {
+            // Zoek of deze gebruiker al een verzoek heeft openstaan voor deze pop
+            $popRequest = PopRequest::where('pop_id', $event->id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($popRequest) {
+                $rsvpStatus = $popRequest->status; // Dit geeft 'requested' of 'accepted' terug
+
+                // Als je met tickets werkt, kun je hier checken of de status 'paid' is,
+                // of je checkt een aparte betalingstabel:
+                if ($popRequest->status === 'paid') {
+                    $hasPaid = true;
+                }
+            }
+        }
+
         return response()->json([
             'event' => $this->maskSensitiveData($event),
-            'is_revealed' => $isRevealed
+            'is_revealed' => $isRevealed,
+            'rsvp_status' => $rsvpStatus,
+            'has_paid' => $hasPaid
         ]);
     }
 

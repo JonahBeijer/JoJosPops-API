@@ -95,6 +95,9 @@ class EventRequestController extends Controller
     /**
      * 2. Ophalen van álle binnenkomende aanvragen over alle events waarvan IK de host ben (Algemeen overzicht)
      */
+    /**
+     * 2. Ophalen van alle binnenkomende aanvragen en directe aanmeldingen (Algemeen overzicht)
+     */
     public function getPendingRequests(Request $request)
     {
         $userId = $request->user()->id;
@@ -102,8 +105,10 @@ class EventRequestController extends Controller
         $requests = PopRequest::whereHas('pop', function ($q) use ($userId) {
             $q->where('user_id', $userId);
         })
-            ->where('status', 'pending')
+            // 🔥 NU: Haal zowel pending (verzoeken) als accepted/paid (directe aanmeldingen) op
+            ->whereIn('status', ['pending', 'accepted', 'paid'])
             ->with(['user:id,name,username,profile_image', 'pop:id,title'])
+            ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($req) {
                 return [
@@ -112,7 +117,8 @@ class EventRequestController extends Controller
                     'name' => $req->user->name,
                     'username' => $req->user->username,
                     'pop_title' => $req->pop->title,
-                    'profile_image' => $req->user->profile_image
+                    'profile_image' => $req->user->profile_image,
+                    'status' => $req->status // 🔥 Cruciaal: stuur de status mee naar de frontend!
                 ];
             });
 

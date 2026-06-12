@@ -123,6 +123,11 @@ class EventRequestController extends Controller
     /**
      * 3. Ophalen van alle verzoeken (pending & accepted) voor één SPECIFIEKE pop-up (Manage Guests pagina)
      */
+
+
+    /**
+     * 3. Ophalen van alle verzoeken (pending, accepted & paid) voor één SPECIFIEKE pop-up
+     */
     public function getRequestsForPop(Request $request, $id)
     {
         $pop = Pop::findOrFail($id);
@@ -132,23 +137,62 @@ class EventRequestController extends Controller
             return response()->json(['message' => 'Unauthorized. You are not the host.'], 403);
         }
 
-        // Haal alle requests op en koppel de usergegevens (id, name, username) eraan
+        // Haal alle requests op en koppel de usergegevens eraan
         $requests = PopRequest::where('pop_id', $id)
-            ->with(['user:id,name,username'])
+            ->with(['user:id,name,username,profile_image'])
             ->get()
             ->map(function ($req) {
+                // TIP: Als je frontend puur filtert op 'accepted', kun ik 'paid' hier virtueel omzetten naar 'accepted'
+                // zodat je frontend-tabs direct blijven werken zonder dat je daar code hoeft te wijzigen!
+                $displayStatus = $req->status;
+                if ($displayStatus === 'paid') {
+                    $displayStatus = 'accepted';
+                }
+
                 return [
                     'id' => $req->id,
-                    'status' => $req->status, // Geeft 'pending' of 'accepted' mee voor je frontend tabs
+                    'status' => $displayStatus, // Geeft nu 'pending' of 'accepted' (ook voor ticket-kopers!)
+                    'db_status' => $req->status, // Optioneel: de échte status uit de database
                     'user' => [
                         'id' => $req->user->id,
                         'name' => $req->user->name,
                         'username' => $req->user->username,
+                        'profile_image' => $req->user->profile_image,
                     ]
                 ];
             });
 
         return response()->json(['requests' => $requests], 200);
+    }
+
+    /**
+     * 5. Weigeren van een verzoek óf een bestaande gast/ticket-koper VERWIJDEREN
+     */
+    public function declineRequest(Request $request, $requestId)
+    {
+        $popRequest = PopRequest::findOrFail($requestId);
+        $pop = Pop::findOrFail($popRequest->pop_id);
+
+        // BEVEILIGINGSCHECK: Alleen de host mag dit verzoek weigeren of iemand verwijderen
+        if ($pop->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // 🔥 FIX: Als de persoon die we verwijderen de status 'accepted' of 'paid' had,
+        // dan moeten we de gasten-teller van de pop-up met 1 VERLAGEN.
+        if (in_array($popRequest->status, ['accepted', 'paid'])) {
+            if ($pop->current_guests > 0) {
+                $pop->decrement('current_guests');
+            }
+        }
+
+        // We verwijderen de aanvraag/ticket-reservering uit de database
+        $popRequest->delete();
+
+        return response()->json([
+            'message' => 'Gebruiker succesvol van de gastenlijst verwijderd en teller bijgewerkt.',
+            'current_guests' => $pop->fresh()->current_guests // Stuur de nieuwe teller mee terug
+        ], 200);
     }
 
     /**
@@ -175,19 +219,5 @@ class EventRequestController extends Controller
     /**
      * 5. Weigeren/Verwijderen van een join request
      */
-    public function declineRequest(Request $request, $requestId)
-    {
-        $popRequest = PopRequest::findOrFail($requestId);
-        $pop = Pop::findOrFail($popRequest->pop_id);
 
-        // BEVEILIGINGSCHECK: Alleen de host mag dit verzoek weigeren
-        if ($pop->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        // We verwijderen de aanvraag uit de database zodat het verdwijnt uit de lijsten
-        $popRequest->delete();
-
-        return response()->json(['message' => 'Declined successfully'], 200);
-    }
 }

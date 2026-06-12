@@ -25,13 +25,71 @@ class EventRequestController extends Controller
             return response()->json(['message' => 'Already requested or host'], 400);
         }
 
+        // 🔥 FIX 1: Check of de pop 'open' is en GEEN ticket heeft (Gratis open flow)
+        $isOpenAndFree = (strtolower($pop->access) === 'open' && !$pop->is_ticketed);
+
+        // Als het open & gratis is, mag de status direct naar 'accepted'
+        $status = $isOpenAndFree ? 'accepted' : 'pending';
+
         PopRequest::create([
             'user_id' => $request->user()->id,
             'pop_id' => $popId,
-            'status' => 'pending'
+            'status' => $status
         ]);
 
-        return response()->json(['message' => 'Request sent!']);
+        // Als de bezoeker direct is geaccepteerd, verhoog direct de gastenlijst-teller
+        if ($isOpenAndFree) {
+            $pop->increment('current_guests');
+            return response()->json([
+                'message' => 'Direct toegelaten tot dit open evenement! 🎉',
+                'status' => 'accepted'
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Request sent!',
+            'status' => 'pending'
+        ]);
+    }
+
+    /**
+     * Bevestigen van de betaling (Ticket flow)
+     */
+    public function confirmPayment(Request $request, $popId)
+    {
+        $userId = $request->user()->id;
+        $pop = Pop::findOrFail($popId);
+
+        // Haal een eventueel bestaand verzoek op (bijv. als ze eerst 'pending' waren)
+        $popRequest = PopRequest::where('pop_id', $popId)
+            ->where('user_id', $userId)
+            ->first();
+
+        // Check of ze niet stiekem al als 'paid' of 'accepted' in de boeken staan
+        // Dit voorkomt dat de teller dubbel ophoogt als ze vaker op de knop drukken
+        $alreadyCounted = $popRequest && in_array($popRequest->status, ['accepted', 'paid']);
+
+        if (!$popRequest) {
+            // Als er nog geen verzoek was (direct gekocht bij open pop), maak hem aan
+            $popRequest = PopRequest::create([
+                'pop_id' => $popId,
+                'user_id' => $userId,
+                'status' => 'paid'
+            ]);
+        } else {
+            // Als er al een verzoek was, update de status naar 'paid'
+            $popRequest->update(['status' => 'paid']);
+        }
+
+        // 🔥 FIX 2: Als ze nog niet meegeteld waren als actieve gast, verhoog de teller!
+        if (!$alreadyCounted) {
+            $pop->increment('current_guests');
+        }
+
+        return response()->json([
+            'message' => 'Betaling succesvol verwerkt en toegevoegd aan gastenlijst!',
+            'status' => $popRequest->status
+        ]);
     }
 
     /**
@@ -61,22 +119,6 @@ class EventRequestController extends Controller
         return response()->json(['requests' => $requests]);
     }
 
-    public function confirmPayment(Request $request, $popId)
-    {
-        $userId = $request->user()->id;
-
-        // We gebruiken updateOrCreate: als er nog geen request is, maak hem aan.
-        // Als hij er wel is, update de status naar 'paid'.
-        $popRequest = PopRequest::updateOrCreate(
-            ['pop_id' => $popId, 'user_id' => $userId],
-            ['status' => 'paid']
-        );
-
-        return response()->json([
-            'message' => 'Betaling succesvol verwerkt',
-            'status' => $popRequest->status // Dit zou nu 'paid' moeten zijn
-        ]);
-    }
 
     /**
      * 3. Ophalen van alle verzoeken (pending & accepted) voor één SPECIFIEKE pop-up (Manage Guests pagina)

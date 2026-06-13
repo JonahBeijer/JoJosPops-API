@@ -131,35 +131,32 @@ class EventRequestController extends Controller
         $invitedUserId = $request->input('user_id');
 
         // Check of de gebruiker niet toevallig zichzelf uitnodigt
-        if ($host->id == $invitedUserId) {
-            return response()->json(['message' => 'Je kunt jezelf niet uitnodigen.'], 400);
-        }
-
-        // Check of er al een aanvraag of uitnodiging bestaat voor deze gebruiker en deze pop
-        // Gebruik hier de naam van jouw model (bijv. EventRequest of PopRequest)
-        $existingRequest = \App\Models\PopRequest::where('pop_id', $id)
-            ->where('user_id', $invitedUserId)
-            ->first();
-
-        if ($existingRequest) {
-            return response()->json(['message' => 'Deze gebruiker staat al op de lijst of heeft al een aanvraag lopen.'], 400);
-        }
-
-        // Maak de uitnodiging aan. We zetten de status op 'accepted' zodat
-        // de uitgenodigde persoon direct op de gastenlijst (Guestlist tab) staat.
         \App\Models\PopRequest::create([
             'pop_id' => $id,
             'user_id' => $invitedUserId,
-            'status' => 'accepted' // Of 'pending_invite' als de gast nog moet accepteren
+            'status' => 'pending_invite'
         ]);
 
         return response()->json(['success' => true, 'message' => 'Uitnodiging verstuurd!']);
     }
-    /**
-     * 3. Ophalen van alle verzoeken (pending & accepted) voor één SPECIFIEKE pop-up (Manage Guests pagina)
-     */
 
+    public function acceptRequest($requestId)
+    {
+        $request = PopRequest::findOrFail($requestId);
 
+        // Beveiliging: Alleen de host of de uitgenodigde persoon zelf mag accepteren
+        if ($request->pop->user_id !== auth()->id() && $request->user_id !== auth()->id()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // 🔥 FIX: Update status en verhoog de gasten-teller alleen als het nog niet geaccepteerd was
+        if ($request->status !== 'accepted' && $request->status !== 'paid') {
+            $request->update(['status' => 'accepted']);
+            $request->pop->increment('current_guests');
+        }
+
+        return response()->json(['message' => 'Geaccepteerd']);
+    }
     /**
      * 3. Ophalen van alle verzoeken (pending, accepted & paid) voor één SPECIFIEKE pop-up
      */
@@ -177,17 +174,11 @@ class EventRequestController extends Controller
             ->with(['user:id,name,username,profile_image'])
             ->get()
             ->map(function ($req) {
-                // TIP: Als je frontend puur filtert op 'accepted', kun ik 'paid' hier virtueel omzetten naar 'accepted'
-                // zodat je frontend-tabs direct blijven werken zonder dat je daar code hoeft te wijzigen!
-                $displayStatus = $req->status;
-                if ($displayStatus === 'paid') {
-                    $displayStatus = 'accepted';
-                }
-
+                // Mapping voor de frontend tabs
                 return [
                     'id' => $req->id,
-                    'status' => $displayStatus, // Geeft nu 'pending' of 'accepted' (ook voor ticket-kopers!)
-                    'db_status' => $req->status, // Optioneel: de échte status uit de database
+                    'status' => in_array($req->status, ['accepted', 'paid']) ? 'accepted' : 'pending',
+                    'original_status' => $req->status, // Handig om te zien of het een invite of request was
                     'user' => [
                         'id' => $req->user->id,
                         'name' => $req->user->name,
@@ -230,29 +221,6 @@ class EventRequestController extends Controller
         ], 200);
     }
 
-    /**
-     * 4. Accepteren van een request
-     */
-    public function acceptRequest($requestId)
-    {
-        $request = PopRequest::where('status', 'pending')->findOrFail($requestId);
 
-        // Check of de ingelogde gebruiker wel de host is van dit event
-        if ($request->pop->user_id !== auth()->id()) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        // Status updaten naar geaccepteerd
-        $request->update(['status' => 'accepted']);
-
-        // Gasten-teller van de pop-up verhogen met 1
-        $request->pop->increment('current_guests');
-
-        return response()->json(['message' => 'Accepted']);
-    }
-
-    /**
-     * 5. Weigeren/Verwijderen van een join request
-     */
 
 }

@@ -48,6 +48,40 @@ class FriendshipController extends Controller
     }
 
     /**
+     * Invite a specific user to a Pop
+     */
+    public function inviteGuest(Request $request, $id)
+    {
+        $host = $request->user();
+        $invitedUserId = $request->input('user_id');
+
+        // Check of de gebruiker niet toevallig zichzelf uitnodigt
+        if ($host->id == $invitedUserId) {
+            return response()->json(['message' => 'Je kunt jezelf niet uitnodigen.'], 400);
+        }
+
+        // Check of er al een aanvraag of uitnodiging bestaat voor deze gebruiker en deze pop
+        // Gebruik hier de naam van jouw model (bijv. EventRequest of PopRequest)
+        $existingRequest = \App\Models\PopRequest::where('pop_id', $id)
+            ->where('user_id', $invitedUserId)
+            ->first();
+
+        if ($existingRequest) {
+            return response()->json(['message' => 'Deze gebruiker staat al op de lijst of heeft al een aanvraag lopen.'], 400);
+        }
+
+        // Maak de uitnodiging aan. We zetten de status op 'accepted' zodat
+        // de uitgenodigde persoon direct op de gastenlijst (Guestlist tab) staat.
+        \App\Models\PopRequest::create([
+            'pop_id' => $id,
+            'user_id' => $invitedUserId,
+            'status' => 'accepted' // Of 'pending_invite' als de gast nog moet accepteren
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Uitnodiging verstuurd!']);
+    }
+
+    /**
      * 2. Zoek naar gebruikers om toe te voegen (en zie de status van je vriendschap)
      */
     public function search(Request $request)

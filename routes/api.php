@@ -68,4 +68,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar']);
+    Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
 });

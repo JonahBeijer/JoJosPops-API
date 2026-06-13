@@ -88,8 +88,8 @@ class FriendshipController extends Controller
     {
         $user = $request->user();
 
-        // 🔥 NIEUW: Haal een eventuele '@' aan het begin van de zoekterm weg!
-        $query = ltrim($request->input('q'), '@');
+        // Haal een eventuele '@' weg en zet de zoekterm om naar kleine letters
+        $query = strtolower(ltrim($request->input('q'), '@'));
 
         if (blank($query)) {
             return response()->json(['users' => []]);
@@ -98,9 +98,9 @@ class FriendshipController extends Controller
         // Zoek gebruikers op naam of username, behalve jezelf
         $users = User::where('id', '!=', $user->id)
             ->where(function($q) use ($query) {
-                // Nu werkt dit perfect voor zowel namen als usernames!
-                $q->where('name', 'LIKE', "%{$query}%")
-                    ->orWhere('username', 'LIKE', "%{$query}%");
+                // 🔥 FORCEER KLEINE LETTERS VOOR EEN 100% MATCH
+                $q->whereRaw('LOWER(name) LIKE ?', ["%{$query}%"])
+                    ->orWhereRaw('LOWER(username) LIKE ?', ["%{$query}%"]);
             })
             ->select('id', 'name', 'username', 'profile_image')
             ->get()

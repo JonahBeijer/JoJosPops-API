@@ -49,6 +49,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return response()->json($request->user());
     });
+    Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
+    Route::get('/user/invites/pending', [EventRequestController::class, 'getUserInvites']);
     Route::get('/user/invites/pending', [EventRequestController::class, 'getPendingInvites']);
     Route::post('/pops/{id}/confirm-payment', [EventRequestController::class, 'confirmPayment']);
     Route::post('/pops/{id}/confirm-ticket', [EventController::class, 'confirmTicket']);

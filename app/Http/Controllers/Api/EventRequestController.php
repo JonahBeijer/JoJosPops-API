@@ -160,25 +160,34 @@ class EventRequestController extends Controller
     /**
      * 3. Ophalen van alle verzoeken (pending, accepted & paid) voor één SPECIFIEKE pop-up
      */
+    /**
+     * 3. Ophalen van alle verzoeken voor één SPECIFIEKE pop-up
+     */
     public function getRequestsForPop(Request $request, $id)
     {
         $pop = Pop::findOrFail($id);
 
-        // BEVEILIGINGSCHECK: Alleen de host van deze specifieke pop-up mag dit inzien
         if ($pop->user_id !== $request->user()->id) {
             return response()->json(['message' => 'Unauthorized. You are not the host.'], 403);
         }
 
-        // Haal alle requests op en koppel de usergegevens eraan
         $requests = PopRequest::where('pop_id', $id)
             ->with(['user:id,name,username,profile_image'])
             ->get()
             ->map(function ($req) {
-                // Mapping voor de frontend tabs
+                // 🔥 FIX: Als de status 'pending_invite' is, sturen we 'invited' naar de frontend
+                // zodat hij niet bij de normale 'pending' aanvragen tussenkomt.
+                $frontendStatus = 'pending';
+                if (in_array($req->status, ['accepted', 'paid'])) {
+                    $frontendStatus = 'accepted';
+                } elseif ($req->status === 'pending_invite') {
+                    $frontendStatus = 'invited';
+                }
+
                 return [
                     'id' => $req->id,
-                    'status' => in_array($req->status, ['accepted', 'paid']) ? 'accepted' : 'pending',
-                    'original_status' => $req->status, // Handig om te zien of het een invite of request was
+                    'status' => $frontendStatus,
+                    'original_status' => $req->status,
                     'user' => [
                         'id' => $req->user->id,
                         'name' => $req->user->name,
@@ -221,6 +230,33 @@ class EventRequestController extends Controller
         ], 200);
     }
 
+    /**
+     * 🔥 NIEUW: Ophalen van uitnodigingen die JIJ hebt ontvangen van een host
+     * Gekoppeld aan: GET /api/user/invites/pending
+     */
+    public function getUserInvites(Request $request)
+    {
+        $userId = $request->user()->id;
 
+        $invites = PopRequest::where('user_id', $userId)
+            ->where('status', 'pending_invite')
+            ->with(['pop.user']) // We halen de host van de pop-up op
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($req) {
+                return [
+                    'id' => $req->id,
+                    'pop_id' => $req->pop_id,
+                    'user_id' => $req->pop->user_id, // ID van de host
+                    'name' => $req->pop->user->name, // Naam van de host
+                    'username' => $req->pop->user->username,
+                    'pop_title' => $req->pop->title, // Titel van het event
+                    'profile_image' => $req->pop->user->profile_image, // Foto van de host
+                    'status' => $req->status
+                ];
+            });
+
+        return response()->json(['invites' => $invites]);
+    }
 
 }

@@ -240,23 +240,23 @@ class EventRequestController extends Controller
 
         $invites = PopRequest::where('user_id', $userId)
             ->where('status', 'pending_invite')
-            ->with(['pop.user']) // We halen de host van de pop-up op
+            ->whereHas('pop.user') // 🔥 FIX: Zorgt dat hij NIET crasht als de host of pop-up niet meer bestaat
+            ->with(['pop.user'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($req) {
                 return [
                     'id' => $req->id,
                     'pop_id' => $req->pop_id,
-                    'user_id' => $req->pop->user_id, // ID van de host
-                    'name' => $req->pop->user->name, // Naam van de host
+                    'user_id' => $req->pop->user_id,
+                    'name' => $req->pop->user->name,
                     'username' => $req->pop->user->username,
-                    'pop_title' => $req->pop->title, // Titel van het event
-                    'profile_image' => $req->pop->user->profile_image, // Foto van de host
+                    'pop_title' => $req->pop->title,
+                    'profile_image' => $req->pop->user->profile_image,
                     'status' => $req->status
                 ];
             });
 
         return response()->json(['invites' => $invites]);
     }
-
 }

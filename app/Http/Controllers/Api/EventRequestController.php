@@ -105,7 +105,6 @@ class EventRequestController extends Controller
         $requests = PopRequest::whereHas('pop', function ($q) use ($userId) {
             $q->where('user_id', $userId);
         })
-            // 🔥 NU: Haal zowel pending (verzoeken) als accepted/paid (directe aanmeldingen) op
             ->whereIn('status', ['pending', 'accepted', 'paid'])
             ->with(['user:id,name,username,profile_image', 'pop:id,title'])
             ->orderBy('created_at', 'desc')
@@ -113,12 +112,13 @@ class EventRequestController extends Controller
             ->map(function ($req) {
                 return [
                     'id' => $req->id,
+                    'pop_id' => $req->pop_id, // 🔥 OPGELOST: Ontbrak, was nodig om er in de app op te kunnen klikken!
                     'user_id' => $req->user_id,
                     'name' => $req->user->name,
                     'username' => $req->user->username,
                     'pop_title' => $req->pop->title,
                     'profile_image' => $req->user->profile_image,
-                    'status' => $req->status // 🔥 Cruciaal: stuur de status mee naar de frontend!
+                    'status' => $req->status
                 ];
             });
 

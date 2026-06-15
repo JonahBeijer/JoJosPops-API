@@ -8,24 +8,19 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\FriendshipController; // 👈 Importeer de nieuwe controller
+use App\Http\Controllers\Api\FriendshipController;
 
-// Publieke routes (Geen inlog vereist)
 Route::get('/pops/nearby', [EventController::class, 'nearby']);
 Route::get('/pops', [EventController::class, 'index']);
-Route::get('/pops/{id}', [EventController::class, 'show']);
 
-// API Inlog & Registratie routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
-// Google Places API hulp-routes
 Route::get('/places', function (Request $request) {
     $query = $request->input('q');
     if (!$query) {
         return response()->json(['predictions' => []]);
     }
-
     $response = Http::get('https://maps.googleapis.com/maps/api/place/autocomplete/json', [
         'input' => $query,
         'language' => 'nl',
@@ -44,12 +39,14 @@ Route::get('/place-details', function (Request $request) {
     return response()->json($response->json());
 });
 
-// 🔐 Beveiligde routes (Alleen met geldig Sanctum token)
 Route::middleware('auth:sanctum')->group(function () {
+
+    Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
 
     Route::get('/user', function (Request $request) {
         return response()->json($request->user());
     });
+
     Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
     Route::get('/user/invites/pending', [EventRequestController::class, 'getUserInvites']);
     Route::get('/user/invites/pending', [EventRequestController::class, 'getPendingInvites']);
@@ -57,24 +54,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/pops/{id}/confirm-ticket', [EventController::class, 'confirmTicket']);
     Route::post('/profile/sync-premium', [ProfileController::class, 'syncPremium']);
     Route::get('/host/requests/pending', [EventRequestController::class, 'getPendingRequests']);
-    Route::post('/pops/{id}/join-request', [EventRequestController::class, 'storeRequest']); // Voor de 'Request to join' knop
-    Route::post('/pops/requests/{id}/accept', [EventRequestController::class, 'acceptRequest']);    Route::get('/friends', [FriendshipController::class, 'index']);
+    Route::post('/pops/{id}/join-request', [EventRequestController::class, 'storeRequest']);
+    Route::post('/pops/requests/{id}/accept', [EventRequestController::class, 'acceptRequest']);
+    Route::get('/friends', [FriendshipController::class, 'index']);
     Route::get('/friends/search', [FriendshipController::class, 'search']);
     Route::post('/friends/request', [FriendshipController::class, 'sendRequest']);
     Route::post('/friends/accept', [FriendshipController::class, 'acceptRequest']);
     Route::get('/friends/requests/pending', [FriendshipController::class, 'getPendingRequests']);
     Route::post('/pops', [EventController::class, 'store']);
     Route::post('/pops/{id}/buy-ticket', [EventController::class, 'buyTicket']);
-    Route::put('/pops/{id}', [EventController::class, 'update']);     // Voor het bewerken
-    Route::delete('/pops/{id}', [EventController::class, 'destroy']);  // Voor het verwijderen
+    Route::put('/pops/{id}', [EventController::class, 'update']);
+    Route::delete('/pops/{id}', [EventController::class, 'destroy']);
     Route::get('/pops/{id}/requests', [EventRequestController::class, 'getRequestsForPop']);
     Route::post('/pops/requests/{id}/decline', [EventRequestController::class, 'declineRequest']);
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar']);
-    Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
     Route::post('/users/{id}/follow', [FollowController::class, 'follow']);
     Route::post('/users/{id}/unfollow', [FollowController::class, 'unfollow']);
-    Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
-    Route::get('/pops/{id}', [EventController::class, 'show']);
 });
+
+Route::get('/pops/{id}', [EventController::class, 'show']);

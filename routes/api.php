@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\EventRequestController;
+use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Settings\ProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -72,4 +73,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar']);
     Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
+    Route::post('/users/{id}/follow', [FollowController::class, 'follow']);
+    Route::post('/users/{id}/unfollow', [FollowController::class, 'unfollow']);
 });

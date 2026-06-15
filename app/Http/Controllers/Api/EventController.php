@@ -40,27 +40,33 @@ class EventController extends Controller
         $revealTime = Carbon::parse($event->reveal_time);
         $isRevealed = now()->gt($revealTime);
 
-        // Standaard waarden als de gebruiker niet is ingelogd
         $rsvpStatus = 'none';
         $hasPaid = false;
 
-        // Pak de ingelogde API-gebruiker (Pas aan naar auth('sanctum')->user() als je Sanctum gebruikt)
         $user = auth()->user() ?? auth('sanctum')->user();
 
         if ($user) {
-            // Zoek of deze gebruiker al een verzoek heeft openstaan voor deze pop
+            // 🔄 NIEUW: Controleer of de ingelogde gebruiker de host van deze Pop volgt
+            if ($event->user) {
+                $event->user->is_following = $user->following()
+                    ->where('following_id', $event->user->id)
+                    ->exists();
+            }
+
             $popRequest = PopRequest::where('pop_id', $event->id)
                 ->where('user_id', $user->id)
                 ->first();
 
             if ($popRequest) {
-                // Mapt de database status naar wat de app verwacht
                 $rsvpStatus = $popRequest->status;
-
-                // Als de status 'paid' is, zet hasPaid op true
                 if ($rsvpStatus === 'paid') {
                     $hasPaid = true;
                 }
+            }
+        } else {
+            // Als er geen gebruiker is ingelogd, is is_following altijd false
+            if ($event->user) {
+                $event->user->is_following = false;
             }
         }
 
@@ -288,7 +294,7 @@ class EventController extends Controller
         return response()->json($pops);
     }
 
-    
+
 
     private function maskSensitiveData($event)
     {

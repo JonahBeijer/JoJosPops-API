@@ -76,4 +76,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users/{id}/follow', [FollowController::class, 'follow']);
     Route::post('/users/{id}/unfollow', [FollowController::class, 'unfollow']);
     Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
+    Route::get('/pops/{id}', [EventController::class, 'show']);
 });

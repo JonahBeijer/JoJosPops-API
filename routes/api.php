@@ -75,4 +75,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
     Route::post('/users/{id}/follow', [FollowController::class, 'follow']);
     Route::post('/users/{id}/unfollow', [FollowController::class, 'unfollow']);
+    Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
 });

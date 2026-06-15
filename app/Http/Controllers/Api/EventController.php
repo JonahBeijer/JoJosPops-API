@@ -77,7 +77,44 @@ class EventController extends Controller
             'has_paid' => $hasPaid
         ]);
     }
+    public function fypFeed(Request $request)
+    {
+        $user = $request->user();
 
+        // Pak de IDs van de hosts die deze gebruiker volgt
+        $followingIds = $user->following()->pluck('following_id')->toArray();
+
+        $lat = $request->lat;
+        $lng = $request->lng;
+
+        $query = Pop::where('is_active', true)
+            ->whereIn('user_id', $followingIds) // Alleen van gevolgde accounts
+            ->with(['user' => function($q) {
+                $q->select('id', 'name', 'username', 'profile_image');
+            }]);
+
+        if ($lat && $lng) {
+            $query->selectRaw("
+            *,
+            (6371 * acos(
+                cos(radians(?)) *
+                cos(radians(latitude)) *
+                cos(radians(longitude) - radians(?)) +
+                sin(radians(?)) *
+                sin(radians(latitude))
+            )) AS distance
+        ", [$lat, $lng, $lat])
+                ->orderBy('distance', 'asc');
+        } else {
+            $query->orderBy('date', 'asc');
+        }
+
+        $events = $query->get()->map(function($event) {
+            return $this->maskSensitiveData($event);
+        });
+
+        return response()->json($events);
+    }
     public function buyTicket(Request $request, $id)
     {
         $pop = Pop::where('is_active', true)

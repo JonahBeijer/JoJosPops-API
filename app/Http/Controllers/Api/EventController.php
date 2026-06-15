@@ -79,10 +79,20 @@ class EventController extends Controller
     }
     public function fypFeed(Request $request)
     {
-        $user = $request->user();
+        $user = $request->user() ?? auth('sanctum')->user(); // Fallback voor de zekerheid
 
-        // Pak de IDs van de hosts die deze gebruiker volgt
-        $followingIds = $user->following()->pluck('following_id')->toArray();
+        // 1. Voorkom crash als de gebruiker niet is ingelogd
+        if (!$user) {
+            return response()->json([]);
+        }
+
+        // 2. Pluck 'id' (of 'users.id') in plaats van 'following_id'
+        $followingIds = $user->following()->pluck('users.id')->toArray();
+
+        // Als je nog niemand volgt, kunnen we direct een lege array teruggeven om een query te besparen
+        if (empty($followingIds)) {
+            return response()->json([]);
+        }
 
         $lat = $request->lat;
         $lng = $request->lng;
@@ -115,6 +125,7 @@ class EventController extends Controller
 
         return response()->json($events);
     }
+
     public function buyTicket(Request $request, $id)
     {
         $pop = Pop::where('is_active', true)

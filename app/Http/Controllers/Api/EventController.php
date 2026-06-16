@@ -147,8 +147,7 @@ class EventController extends Controller
             }]);
 
         // Pas de algemene zichtbaarheidsregels toe
-        $query = $this->applyEventVisibility($query, $user);
-
+        $query = $this->applyEventVisibility($query, $user, true);
         // 💡 FIX 2: Controleer of lat/lng écht nummers zijn, en niet de tekst "null" of "undefined"
         if ($lat && $lng && is_numeric($lat) && is_numeric($lng)) {
             $query->selectRaw("

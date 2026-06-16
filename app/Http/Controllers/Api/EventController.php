@@ -129,7 +129,8 @@ class EventController extends Controller
             return response()->json([]);
         }
 
-        $followingIds = $user->following()->pluck('users.id')->toArray();
+        // 💡 FIX 1: Waterdichte manier om alle ID's van gevolgde hosts op te halen uit de pivot-tabel
+        $followingIds = $user->following()->allRelatedIds()->toArray();
 
         if (empty($followingIds)) {
             return response()->json([]);
@@ -138,16 +139,18 @@ class EventController extends Controller
         $lat = $request->lat;
         $lng = $request->lng;
 
-        // Pas ook hier de visibility helper toe
-        $query = Pop::query();
-        $query = $this->applyEventVisibility($query, $user);
-
-        $query->whereIn('user_id', $followingIds)
+        // We bouwen de query netjes op via method chaining zodat er geen filters verloren gaan
+        $query = Pop::query()
+            ->whereIn('user_id', $followingIds)
             ->with(['user' => function($q) {
                 $q->select('id', 'name', 'username', 'profile_image');
             }]);
 
-        if ($lat && $lng) {
+        // Pas de algemene zichtbaarheidsregels toe
+        $query = $this->applyEventVisibility($query, $user);
+
+        // 💡 FIX 2: Controleer of lat/lng écht nummers zijn, en niet de tekst "null" of "undefined"
+        if ($lat && $lng && is_numeric($lat) && is_numeric($lng)) {
             $query->selectRaw("
             *,
             (6371 * acos(

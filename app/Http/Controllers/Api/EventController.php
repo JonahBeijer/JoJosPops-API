@@ -129,26 +129,44 @@ class EventController extends Controller
             return response()->json([]);
         }
 
-        // 💡 FIX 1: Waterdichte manier om alle ID's van gevolgde hosts op te halen uit de pivot-tabel
         $followingIds = $user->following()->allRelatedIds()->toArray();
-
-        if (empty($followingIds)) {
-            return response()->json([]);
-        }
-
         $lat = $request->lat;
         $lng = $request->lng;
 
-        // We bouwen de query netjes op via method chaining zodat er geen filters verloren gaan
+        // We gebruiken een geneste where() functie (closure) om de OR logica
+        // netjes te groeperen, zodat het niet botst met applyEventVisibility().
         $query = Pop::query()
-            ->whereIn('user_id', $followingIds)
+            ->where(function ($q) use ($followingIds, $user) {
+
+                // 1. Events van hosts die de user volgt
+                if (!empty($followingIds)) {
+                    $q->whereIn('user_id', $followingIds);
+                } else {
+                    // Trick om te zorgen dat de orWhere's hieronder goed werken
+                    // als de user nog niemand volgt, zonder per ongeluk alles op te halen.
+                    $q->whereRaw('0 = 1');
+                }
+
+                // 2. Events waarvoor deze specifieke user is uitgenodigd
+                $q->orWhereHas('requests', function ($reqQuery) use ($user) {
+                    $reqQuery->where('user_id', $user->id)
+                        ->where('status', 'pending_invite'); // Zorg dat dit de juiste status is
+                });
+
+                // 3. Premium events (alleen als de ingelogde user zelf premium is)
+                // Let op: controleer of 'is_premium' de juiste kolomnamen zijn in je database!
+                if (isset($user->is_premium) && $user->is_premium) {
+                    $q->orWhere('is_premium', true);
+                }
+            })
             ->with(['user' => function($q) {
                 $q->select('id', 'name', 'username', 'profile_image');
             }]);
 
-        // Pas de algemene zichtbaarheidsregels toe
+        // Pas de algemene zichtbaarheidsregels toe (b.v. datum in de toekomst)
         $query = $this->applyEventVisibility($query, $user, true);
-        // 💡 FIX 2: Controleer of lat/lng écht nummers zijn, en niet de tekst "null" of "undefined"
+
+        // Afstand berekenen en sorteren
         if ($lat && $lng && is_numeric($lat) && is_numeric($lng)) {
             $query->selectRaw("
             *,

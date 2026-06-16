@@ -25,19 +25,18 @@ class EventRequestController extends Controller
             return response()->json(['message' => 'Already requested or host'], 400);
         }
 
-        // 🔥 FIX 1: Check of de pop 'open' is en GEEN ticket heeft (Gratis open flow)
-        $isOpenAndFree = (strtolower($pop->access) === 'open' && !$pop->is_ticketed);
+        // 🔥 FIX: We controleren nu eerst of $pop->access wel bestaat voordat we strtolower() gebruiken!
+        $isOpenAndFree = (!empty($pop->access) && strtolower($pop->access) === 'open' && !$pop->is_ticketed);
 
         // Als het open & gratis is, mag de status direct naar 'accepted'
         $status = $isOpenAndFree ? 'accepted' : 'pending';
 
-        PopRequest::create([
+        $popRequest = PopRequest::create([
             'user_id' => $request->user()->id,
             'pop_id' => $popId,
             'status' => $status
         ]);
 
-        // Als de bezoeker direct is geaccepteerd, verhoog direct de gastenlijst-teller
         if ($isOpenAndFree) {
             $pop->increment('current_guests');
             return response()->json([

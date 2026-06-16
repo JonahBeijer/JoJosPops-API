@@ -51,6 +51,8 @@ class EventRequestController extends Controller
         ]);
     }
 
+
+
     /**
      * Bevestigen van de betaling (Ticket flow)
      */

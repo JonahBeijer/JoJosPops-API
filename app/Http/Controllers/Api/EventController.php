@@ -13,12 +13,43 @@ use Stripe\PaymentIntent;
 
 class EventController extends Controller
 {
-    public function index()
+    /**
+     * Helper om de query te filteren op basis van:
+     * 1. Event is in de toekomst
+     * 2. OF Event is al geweest, maar de ingelogde gebruiker heeft betaald/is gegaan.
+     */
+    private function applyEventVisibility($query, $user = null)
     {
-        $events = Pop::where('is_active', true)
-            ->with(['user' => function($query) {
-                $query->select('id', 'name', 'username', 'profile_image');
-            }])
+        return $query->where('is_active', true)
+            ->where(function ($q) use ($user) {
+                // Regel A: Event is nog niet geweest (vandaag of in de toekomst)
+                // Als je een specifieke event_time hebt, kun je dit combineren tot een volledige timestamp.
+                $q->where('date', '>=', now()->toDateString());
+
+                // Regel B: Event is al voorbij, maar de user heeft een ticket ('paid')
+                if ($user) {
+                    $q->orWhere(function ($subQ) use ($user) {
+                        $subQ->where('date', '<', now()->toDateString())
+                            ->whereHas('popRequests', function ($requestQuery) use ($user) {
+                                $requestQuery->where('user_id', $user->id)
+                                    ->where('status', 'paid');
+                            });
+                    });
+                }
+            });
+    }
+
+    public function index(Request $request)
+    {
+        $user = $request->user() ?? auth('sanctum')->user();
+
+        // Gebruik de nieuwe visibility helper
+        $query = Pop::query();
+        $query = $this->applyEventVisibility($query, $user);
+
+        $events = $query->with(['user' => function($query) {
+            $query->select('id', 'name', 'username', 'profile_image');
+        }])
             ->orderBy('date', 'asc')
             ->get()
             ->map(function ($event) {
@@ -29,33 +60,27 @@ class EventController extends Controller
         return response()->json($events);
     }
 
-    // 🔥 FIX 1: Request $request toegevoegd aan de parameters zodat hij je token ALTIJD pakt
     public function show(Request $request, $id)
     {
-        $event = Pop::where('is_active', true)
-            ->with(['user' => function($query) {
-                $query->select('id', 'name', 'username', 'profile_image');
-            }])
+        // Zoek de pop op (eerst los om te kijken of hij überhaupt bestaat)
+        $event = Pop::with(['user' => function($query) {
+            $query->select('id', 'name', 'username', 'profile_image');
+        }])
             ->findOrFail($id);
 
-        $revealTime = Carbon::parse($event->reveal_time);
-        $isRevealed = now()->gt($revealTime);
+        $user = $request->user() ?? auth('sanctum')->user();
 
+        // Controleer RSVP status
         $rsvpStatus = 'none';
         $hasPaid = false;
 
-        // 🔥 FIX 2: Checken via $request->user() is veel betrouwbaarder in Laravel API's
-        $user = $request->user() ?? auth('sanctum')->user();
-
         if ($user) {
-            // Controleer of de ingelogde gebruiker de host van deze Pop volgt
             if ($event->user) {
                 $event->user->is_following = $user->following()
                     ->where('following_id', $event->user->id)
                     ->exists();
             }
 
-            // Haal het verzoek op voor DEZE specifieke pop en DEZE ingelogde user
             $popRequest = PopRequest::where('pop_id', $event->id)
                 ->where('user_id', $user->id)
                 ->first();
@@ -67,13 +92,25 @@ class EventController extends Controller
                 }
             }
         } else {
-            // Als er geen gebruiker is ingelogd, is is_following altijd false
             if ($event->user) {
                 $event->user->is_following = false;
             }
         }
 
-        // 🔥 FIX 3: Plak de status DIRECT in het event object zodat je app hem 100% snapt
+        // --- HIER IS DE CHECK VOOR AFGELOPEN EVENTS ---
+        $eventDate = Carbon::parse($event->date);
+        $isPastEvent = $eventDate->isPast() && !$eventDate->isToday();
+
+        // Als het event niet actief is óf in het verleden ligt EN de user heeft niet betaald: Blokkeer toegang.
+        if (!$event->is_active || ($isPastEvent && !$hasPaid)) {
+            return response()->json([
+                'message' => 'Dit event is afgelopen en alleen toegankelijk voor bezoekers.'
+            ], 403);
+        }
+
+        $revealTime = Carbon::parse($event->reveal_time);
+        $isRevealed = now()->gt($revealTime);
+
         $event->user_rsvp_status = $rsvpStatus;
 
         return response()->json([
@@ -86,17 +123,14 @@ class EventController extends Controller
 
     public function fypFeed(Request $request)
     {
-        $user = $request->user() ?? auth('sanctum')->user(); // Fallback voor de zekerheid
+        $user = $request->user() ?? auth('sanctum')->user();
 
-        // 1. Voorkom crash als de gebruiker niet is ingelogd
         if (!$user) {
             return response()->json([]);
         }
 
-        // 2. Pluck 'id' (of 'users.id') in plaats van 'following_id'
         $followingIds = $user->following()->pluck('users.id')->toArray();
 
-        // Als je nog niemand volgt, kunnen we direct een lege array teruggeven om een query te besparen
         if (empty($followingIds)) {
             return response()->json([]);
         }
@@ -104,8 +138,11 @@ class EventController extends Controller
         $lat = $request->lat;
         $lng = $request->lng;
 
-        $query = Pop::where('is_active', true)
-            ->whereIn('user_id', $followingIds) // Alleen van gevolgde accounts
+        // Pas ook hier de visibility helper toe
+        $query = Pop::query();
+        $query = $this->applyEventVisibility($query, $user);
+
+        $query->whereIn('user_id', $followingIds)
             ->with(['user' => function($q) {
                 $q->select('id', 'name', 'username', 'profile_image');
             }]);
@@ -135,7 +172,9 @@ class EventController extends Controller
 
     public function buyTicket(Request $request, $id)
     {
+        // Alleen actieve events die nog moeten komen kunnen tickets verkopen
         $pop = Pop::where('is_active', true)
+            ->where('date', '>=', now()->toDateString())
             ->with('user')
             ->findOrFail($id);
 
@@ -151,7 +190,6 @@ class EventController extends Controller
         $applicationFeeInCents = (int) round($ticketPriceInCents * 0.15);
 
         try {
-
             $paymentIntent = PaymentIntent::create([
                 'amount' => $ticketPriceInCents,
                 'currency' => 'eur',
@@ -165,7 +203,6 @@ class EventController extends Controller
             ], 200);
 
         } catch (\Exception $e) {
-
             return response()->json([
                 'message' => 'Fout bij het opzetten van de betaling.',
                 'error' => $e->getMessage()
@@ -202,7 +239,6 @@ class EventController extends Controller
         ]);
 
         if ($request->hasFile('images')) {
-
             if (!empty($pop->images)) {
                 foreach ($pop->images as $oldPath) {
                     Storage::disk('public')->delete($oldPath);
@@ -210,12 +246,10 @@ class EventController extends Controller
             }
 
             $storedPaths = [];
-
             foreach ($request->file('images') as $file) {
                 $path = $file->store('pops', 'public');
                 $storedPaths[] = $path;
             }
-
             $validated['images'] = $storedPaths;
         }
 
@@ -242,7 +276,6 @@ class EventController extends Controller
         }
 
         try {
-
             if (!empty($pop->images)) {
                 foreach ($pop->images as $path) {
                     Storage::disk('public')->delete($path);
@@ -256,7 +289,6 @@ class EventController extends Controller
             ], 200);
 
         } catch (\Exception $e) {
-
             return response()->json([
                 'message' => 'Failed to delete pop-up.',
                 'error' => $e->getMessage()
@@ -288,14 +320,11 @@ class EventController extends Controller
         $validated['is_active'] = true;
 
         if ($request->hasFile('images')) {
-
             $storedPaths = [];
-
             foreach ($request->file('images') as $file) {
                 $path = $file->store('pops', 'public');
                 $storedPaths[] = $path;
             }
-
             $validated['images'] = $storedPaths;
         }
 
@@ -321,11 +350,14 @@ class EventController extends Controller
         $lat = $request->lat;
         $lng = $request->lng;
         $radius = $request->radius ?? 10;
+        $user = $request->user() ?? auth('sanctum')->user();
 
-        $pops = Pop::where('is_active', true)
-            ->with(['user' => function($query) {
-                $query->select('id', 'name', 'username', 'profile_image');
-            }])
+        $query = Pop::query();
+        $query = $this->applyEventVisibility($query, $user);
+
+        $pops = $query->with(['user' => function($query) {
+            $query->select('id', 'name', 'username', 'profile_image');
+        }])
             ->selectRaw("
             *,
             (6371 * acos(
@@ -347,38 +379,30 @@ class EventController extends Controller
         return response()->json($pops);
     }
 
+
+
     private function maskSensitiveData($event)
     {
         $revealTime = Carbon::parse($event->reveal_time);
 
         if (now()->lt($revealTime)) {
-            $event->location =
-                "Location locked until " .
-                $revealTime->format('H:i');
+            $event->location = "Location locked until " . $revealTime->format('H:i');
         } else {
-            $event->location =
-                $event->location ??
-                $event->neighbourhood;
+            $event->location = $event->location ?? $event->neighbourhood;
         }
 
         $urls = [];
-
         if (!empty($event->images)) {
-
-            $imagesArray =
-                is_array($event->images)
-                    ? $event->images
-                    : (json_decode($event->images, true)
-                    ?? [$event->images]);
+            $imagesArray = is_array($event->images)
+                ? $event->images
+                : (json_decode($event->images, true) ?? [$event->images]);
 
             foreach ($imagesArray as $path) {
                 if ($path) {
-                    $urls[] =
-                        asset('storage/' . $path);
+                    $urls[] = asset('storage/' . $path);
                 }
             }
         }
-
         $event->image_urls = $urls;
 
         return $event;

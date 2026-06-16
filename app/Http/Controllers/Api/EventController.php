@@ -29,7 +29,8 @@ class EventController extends Controller
         return response()->json($events);
     }
 
-    public function show($id)
+    // 🔥 FIX 1: Request $request toegevoegd aan de parameters zodat hij je token ALTIJD pakt
+    public function show(Request $request, $id)
     {
         $event = Pop::where('is_active', true)
             ->with(['user' => function($query) {
@@ -43,16 +44,18 @@ class EventController extends Controller
         $rsvpStatus = 'none';
         $hasPaid = false;
 
-        $user = auth()->user() ?? auth('sanctum')->user();
+        // 🔥 FIX 2: Checken via $request->user() is veel betrouwbaarder in Laravel API's
+        $user = $request->user() ?? auth('sanctum')->user();
 
         if ($user) {
-            // 🔄 NIEUW: Controleer of de ingelogde gebruiker de host van deze Pop volgt
+            // Controleer of de ingelogde gebruiker de host van deze Pop volgt
             if ($event->user) {
                 $event->user->is_following = $user->following()
                     ->where('following_id', $event->user->id)
                     ->exists();
             }
 
+            // Haal het verzoek op voor DEZE specifieke pop en DEZE ingelogde user
             $popRequest = PopRequest::where('pop_id', $event->id)
                 ->where('user_id', $user->id)
                 ->first();
@@ -70,6 +73,9 @@ class EventController extends Controller
             }
         }
 
+        // 🔥 FIX 3: Plak de status DIRECT in het event object zodat je app hem 100% snapt
+        $event->user_rsvp_status = $rsvpStatus;
+
         return response()->json([
             'event' => $this->maskSensitiveData($event),
             'is_revealed' => $isRevealed,
@@ -77,6 +83,7 @@ class EventController extends Controller
             'has_paid' => $hasPaid
         ]);
     }
+
     public function fypFeed(Request $request)
     {
         $user = $request->user() ?? auth('sanctum')->user(); // Fallback voor de zekerheid
@@ -278,8 +285,6 @@ class EventController extends Controller
         ]);
 
         $validated['user_id'] = $request->user()->id;
-
-        // NIEUW
         $validated['is_active'] = true;
 
         if ($request->hasFile('images')) {
@@ -341,8 +346,6 @@ class EventController extends Controller
 
         return response()->json($pops);
     }
-
-
 
     private function maskSensitiveData($event)
     {

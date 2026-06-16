@@ -25,7 +25,6 @@ class EventRequestController extends Controller
             ->where('pop_id', $popId)
             ->first();
 
-        // Als de gebruiker al een invite heeft gekregen en op 'Join' drukt, accepteren we hem direct!
         if ($existingRequest) {
             if ($existingRequest->status === 'pending_invite') {
                 $existingRequest->update(['status' => 'accepted']);
@@ -39,7 +38,6 @@ class EventRequestController extends Controller
             return response()->json(['message' => 'Already requested or accepted'], 400);
         }
 
-        // Check of de pop 'open' is (null mag ook open zijn) en GEEN ticket heeft
         $isOpenAndFree = ((empty($pop->access) || strtolower($pop->access) === 'open') && !$pop->is_ticketed);
 
         $status = $isOpenAndFree ? 'accepted' : 'pending';
@@ -132,6 +130,15 @@ class EventRequestController extends Controller
     {
         $host = $request->user();
         $invitedUserId = $request->input('user_id');
+
+        // 🔥 FIX: Voorkom dubbele uitnodigingen
+        $existing = \App\Models\PopRequest::where('pop_id', $id)
+            ->where('user_id', $invitedUserId)
+            ->first();
+
+        if ($existing) {
+            return response()->json(['message' => 'User is already invited or requested.'], 400);
+        }
 
         \App\Models\PopRequest::create([
             'pop_id' => $id,
@@ -233,8 +240,10 @@ class EventRequestController extends Controller
         $userId = $request->user()->id;
 
         $invites = PopRequest::where('user_id', $userId)
-            // Zowel openstaande als geaccepteerde invites worden meegestuurd
-            ->whereIn('status', ['pending_invite', 'accepted', 'paid'])
+            // 🔥 FIX: Omdat VIP rules nu actief zijn in EventController, is het veilig
+            // om alleen echte invites (pending_invite) hier in the inbox te tonen.
+            // Hierdoor spam je jezelf niet meer met je eigen open-event join-requests!
+            ->where('status', 'pending_invite')
             ->whereHas('pop.user')
             ->with(['pop.user'])
             ->orderBy('created_at', 'desc')

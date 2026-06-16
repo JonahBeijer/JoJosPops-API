@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Models\Pop;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +23,21 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
+        // 1. Haal de pops op die van de gebruiker ZELF zijn
+        $myPops = Pop::where('user_id', $user->id)
+            ->orderBy('date', 'desc')
+            ->get();
+
+        // 2. 🚀 Haal de pops op waar deze gebruiker naar TOE GAAT
+        // (Dus waarvoor hij in PopRequest de status 'accepted' of 'paid' heeft)
+        $goingPops = Pop::whereHas('requests', function($query) use ($user) {
+            $query->where('user_id', $user->id)
+                ->whereIn('status', ['accepted', 'paid']);
+        })
+            ->where('is_active', true) // Check optioneel of het event niet verwijderd is
+            ->orderBy('date', 'asc') // Sorteer op datum zodat de eerste de volgende is
+            ->get();
+
         return response()->json([
             'user' => [
                 'id' => $user->id,
@@ -29,13 +45,8 @@ class ProfileController extends Controller
                 'username' => $user->username,
                 'profile_image' => $user->profile_image
             ],
-            'my_pops' => $user->pops()
-                    ->select('pops.id', 'pops.title', 'pops.location', 'pops.date', 'pops.images') // ✅ GEFIXT
-                    ->get() ?? [],
-
-            'favorites' => $user->favoritePops()
-                    ->select('pops.id', 'pops.title', 'pops.location', 'pops.date', 'pops.images') // ✅ GEFIXT
-                    ->get() ?? [],
+            'my_pops' => $myPops,
+            'going' => $goingPops // 👈 Hier sturen we de goede going lijst terug!
         ], 200);
     }
 

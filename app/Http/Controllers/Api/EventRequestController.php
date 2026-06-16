@@ -25,7 +25,7 @@ class EventRequestController extends Controller
             ->where('pop_id', $popId)
             ->first();
 
-        // 🔥 FIX 1: Als de gebruiker al een invite heeft gekregen en op 'Join' drukt, accepteren we hem!
+        // Als de gebruiker al een invite heeft gekregen en op 'Join' drukt, accepteren we hem direct!
         if ($existingRequest) {
             if ($existingRequest->status === 'pending_invite') {
                 $existingRequest->update(['status' => 'accepted']);
@@ -39,8 +39,8 @@ class EventRequestController extends Controller
             return response()->json(['message' => 'Already requested or accepted'], 400);
         }
 
-        // Check of de pop 'open' is en GEEN ticket heeft
-        $isOpenAndFree = (!empty($pop->access) && strtolower($pop->access) === 'open' && !$pop->is_ticketed);
+        // Check of de pop 'open' is (null mag ook open zijn) en GEEN ticket heeft
+        $isOpenAndFree = ((empty($pop->access) || strtolower($pop->access) === 'open') && !$pop->is_ticketed);
 
         $status = $isOpenAndFree ? 'accepted' : 'pending';
 
@@ -155,7 +155,6 @@ class EventRequestController extends Controller
             $request->pop->increment('current_guests');
         }
 
-        // 🔥 FIX 2: Frontend heeft de nieuwe status nodig om de UI te updaten
         return response()->json([
             'message' => 'Geaccepteerd',
             'status' => 'accepted'
@@ -234,7 +233,8 @@ class EventRequestController extends Controller
         $userId = $request->user()->id;
 
         $invites = PopRequest::where('user_id', $userId)
-            ->where('status', 'pending_invite')
+            // Zowel openstaande als geaccepteerde invites worden meegestuurd
+            ->whereIn('status', ['pending_invite', 'accepted', 'paid'])
             ->whereHas('pop.user')
             ->with(['pop.user'])
             ->orderBy('created_at', 'desc')

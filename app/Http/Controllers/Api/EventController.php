@@ -45,26 +45,24 @@ class EventController extends Controller
                 $q->whereIn('access', ['open', 'private', 'Open', 'Private'])
                     ->orWhereNull('access');
 
-                // 2. Als er een user is ingelogd, controleren we de speciale permissies
                 if ($user) {
-                    // Host mag altijd zijn eigen event zien
+                    // 2. Host mag altijd zijn eigen event zien
                     $q->orWhere('user_id', $user->id);
 
-                    // Premium check
+                    // 3. 🔥 DE VIP PASS: Als je een invite hebt gekregen (of al geaccepteerd/betaald hebt),
+                    // overruled dit ALLES en mag je de pop altijd op Home en Nearby zien!
+                    $q->orWhereHas('requests', function ($reqQuery) use ($user) {
+                        $reqQuery->where('user_id', $user->id)
+                            ->whereIn('status', ['pending_invite', 'accepted', 'paid']);
+                    });
+
+                    // 4. Premium check
                     if (isset($user->is_premium) && $user->is_premium) {
                         $q->orWhereIn('access', ['premium', 'Premium']);
                     }
-
-                    // Invite-only check (alleen als user de juiste status heeft)
-                    $q->orWhere(function ($inviteCheck) use ($user) {
-                        $inviteCheck->whereIn('access', ['invite', 'Invite', 'invite_only'])
-                            ->whereHas('requests', function ($reqQuery) use ($user) {
-                                $reqQuery->where('user_id', $user->id)
-                                    ->whereIn('status', ['pending_invite', 'accepted']);
-                            });
-                    });
                 }
             });
+
     }
 
     public function index(Request $request)

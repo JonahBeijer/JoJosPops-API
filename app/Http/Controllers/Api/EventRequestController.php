@@ -10,29 +10,42 @@ use Illuminate\Http\Request;
 class EventRequestController extends Controller
 {
     /**
-     * 1. Zelf een request sturen (aangeroepen door je 'Request to join' knop)
+     * 1. Zelf een request sturen óf een openstaande invite accepteren
      */
     public function storeRequest(Request $request, $popId)
     {
         $pop = Pop::findOrFail($popId);
+        $userId = $request->user()->id;
 
-        // Check of er al een request is of dat de gebruiker de host is
-        $exists = PopRequest::where('user_id', $request->user()->id)
-            ->where('pop_id', $popId)
-            ->exists();
-
-        if ($exists || $pop->user_id === $request->user()->id) {
-            return response()->json(['message' => 'Already requested or host'], 400);
+        if ($pop->user_id === $userId) {
+            return response()->json(['message' => 'You are the host'], 400);
         }
 
-        // 🔥 FIX: We controleren nu eerst of $pop->access wel bestaat voordat we strtolower() gebruiken!
+        $existingRequest = PopRequest::where('user_id', $userId)
+            ->where('pop_id', $popId)
+            ->first();
+
+        // 🔥 FIX 1: Als de gebruiker al een invite heeft gekregen en op 'Join' drukt, accepteren we hem!
+        if ($existingRequest) {
+            if ($existingRequest->status === 'pending_invite') {
+                $existingRequest->update(['status' => 'accepted']);
+                $pop->increment('current_guests');
+
+                return response()->json([
+                    'message' => 'Uitnodiging geaccepteerd! 🎉',
+                    'status' => 'accepted'
+                ]);
+            }
+            return response()->json(['message' => 'Already requested or accepted'], 400);
+        }
+
+        // Check of de pop 'open' is en GEEN ticket heeft
         $isOpenAndFree = (!empty($pop->access) && strtolower($pop->access) === 'open' && !$pop->is_ticketed);
 
-        // Als het open & gratis is, mag de status direct naar 'accepted'
         $status = $isOpenAndFree ? 'accepted' : 'pending';
 
-        $popRequest = PopRequest::create([
-            'user_id' => $request->user()->id,
+        PopRequest::create([
+            'user_id' => $userId,
             'pop_id' => $popId,
             'status' => $status
         ]);
@@ -51,8 +64,6 @@ class EventRequestController extends Controller
         ]);
     }
 
-
-
     /**
      * Bevestigen van de betaling (Ticket flow)
      */
@@ -61,28 +72,22 @@ class EventRequestController extends Controller
         $userId = $request->user()->id;
         $pop = Pop::findOrFail($popId);
 
-        // Haal een eventueel bestaand verzoek op (bijv. als ze eerst 'pending' waren)
         $popRequest = PopRequest::where('pop_id', $popId)
             ->where('user_id', $userId)
             ->first();
 
-        // Check of ze niet stiekem al als 'paid' of 'accepted' in de boeken staan
-        // Dit voorkomt dat de teller dubbel ophoogt als ze vaker op de knop drukken
         $alreadyCounted = $popRequest && in_array($popRequest->status, ['accepted', 'paid']);
 
         if (!$popRequest) {
-            // Als er nog geen verzoek was (direct gekocht bij open pop), maak hem aan
             $popRequest = PopRequest::create([
                 'pop_id' => $popId,
                 'user_id' => $userId,
                 'status' => 'paid'
             ]);
         } else {
-            // Als er al een verzoek was, update de status naar 'paid'
             $popRequest->update(['status' => 'paid']);
         }
 
-        // 🔥 FIX 2: Als ze nog niet meegeteld waren als actieve gast, verhoog de teller!
         if (!$alreadyCounted) {
             $pop->increment('current_guests');
         }
@@ -93,9 +98,6 @@ class EventRequestController extends Controller
         ]);
     }
 
-    /**
-     * 2. Ophalen van álle binnenkomende aanvragen over alle events waarvan IK de host ben (Algemeen overzicht)
-     */
     /**
      * 2. Ophalen van alle binnenkomende aanvragen en directe aanmeldingen (Algemeen overzicht)
      */
@@ -113,7 +115,7 @@ class EventRequestController extends Controller
             ->map(function ($req) {
                 return [
                     'id' => $req->id,
-                    'pop_id' => $req->pop_id, // 🔥 OPGELOST: Ontbrak, was nodig om er in de app op te kunnen klikken!
+                    'pop_id' => $req->pop_id,
                     'user_id' => $req->user_id,
                     'name' => $req->user->name,
                     'username' => $req->user->username,
@@ -131,7 +133,6 @@ class EventRequestController extends Controller
         $host = $request->user();
         $invitedUserId = $request->input('user_id');
 
-        // Check of de gebruiker niet toevallig zichzelf uitnodigt
         \App\Models\PopRequest::create([
             'pop_id' => $id,
             'user_id' => $invitedUserId,
@@ -145,22 +146,22 @@ class EventRequestController extends Controller
     {
         $request = PopRequest::findOrFail($requestId);
 
-        // Beveiliging: Alleen de host of de uitgenodigde persoon zelf mag accepteren
         if ($request->pop->user_id !== auth()->id() && $request->user_id !== auth()->id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // 🔥 FIX: Update status en verhoog de gasten-teller alleen als het nog niet geaccepteerd was
         if ($request->status !== 'accepted' && $request->status !== 'paid') {
             $request->update(['status' => 'accepted']);
             $request->pop->increment('current_guests');
         }
 
-        return response()->json(['message' => 'Geaccepteerd']);
+        // 🔥 FIX 2: Frontend heeft de nieuwe status nodig om de UI te updaten
+        return response()->json([
+            'message' => 'Geaccepteerd',
+            'status' => 'accepted'
+        ]);
     }
-    /**
-     * 3. Ophalen van alle verzoeken (pending, accepted & paid) voor één SPECIFIEKE pop-up
-     */
+
     /**
      * 3. Ophalen van alle verzoeken voor één SPECIFIEKE pop-up
      */
@@ -176,8 +177,6 @@ class EventRequestController extends Controller
             ->with(['user:id,name,username,profile_image'])
             ->get()
             ->map(function ($req) {
-                // 🔥 FIX: Als de status 'pending_invite' is, sturen we 'invited' naar de frontend
-                // zodat hij niet bij de normale 'pending' aanvragen tussenkomt.
                 $frontendStatus = 'pending';
                 if (in_array($req->status, ['accepted', 'paid'])) {
                     $frontendStatus = 'accepted';
@@ -209,31 +208,26 @@ class EventRequestController extends Controller
         $popRequest = PopRequest::findOrFail($requestId);
         $pop = Pop::findOrFail($popRequest->pop_id);
 
-        // BEVEILIGINGSCHECK: Alleen de host mag dit verzoek weigeren of iemand verwijderen
         if ($pop->user_id !== $request->user()->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // 🔥 FIX: Als de persoon die we verwijderen de status 'accepted' of 'paid' had,
-        // dan moeten we de gasten-teller van de pop-up met 1 VERLAGEN.
         if (in_array($popRequest->status, ['accepted', 'paid'])) {
             if ($pop->current_guests > 0) {
                 $pop->decrement('current_guests');
             }
         }
 
-        // We verwijderen de aanvraag/ticket-reservering uit de database
         $popRequest->delete();
 
         return response()->json([
             'message' => 'Gebruiker succesvol van de gastenlijst verwijderd en teller bijgewerkt.',
-            'current_guests' => $pop->fresh()->current_guests // Stuur de nieuwe teller mee terug
+            'current_guests' => $pop->fresh()->current_guests
         ], 200);
     }
 
     /**
-     * 🔥 NIEUW: Ophalen van uitnodigingen die JIJ hebt ontvangen van een host
-     * Gekoppeld aan: GET /api/user/invites/pending
+     * Ophalen van uitnodigingen die JIJ hebt ontvangen van een host
      */
     public function getUserInvites(Request $request)
     {
@@ -241,7 +235,7 @@ class EventRequestController extends Controller
 
         $invites = PopRequest::where('user_id', $userId)
             ->where('status', 'pending_invite')
-            ->whereHas('pop.user') // 🔥 FIX: Zorgt dat hij NIET crasht als de host of pop-up niet meer bestaat
+            ->whereHas('pop.user')
             ->with(['pop.user'])
             ->orderBy('created_at', 'desc')
             ->get()

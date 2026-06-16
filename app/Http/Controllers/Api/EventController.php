@@ -133,31 +133,48 @@ class EventController extends Controller
         $lat = $request->lat;
         $lng = $request->lng;
 
-        // We gebruiken een geneste where() functie (closure) om de OR logica
-        // netjes te groeperen, zodat het niet botst met applyEventVisibility().
+        // 🔥 FIX: De 4 access rules (open, private, invite, premium) netjes afgeschermd
         $query = Pop::query()
             ->where(function ($q) use ($followingIds, $user) {
 
-                // 1. Events van hosts die de user volgt
-                if (!empty($followingIds)) {
-                    $q->whereIn('user_id', $followingIds);
-                } else {
-                    // Trick om te zorgen dat de orWhere's hieronder goed werken
-                    // als de user nog niemand volgt, zonder per ongeluk alles op te halen.
-                    $q->whereRaw('0 = 1');
-                }
+                // --- 1. RELEVANTIE: Waarom staat dit op je For You feed? ---
+                $q->where(function ($subQ) use ($followingIds, $user) {
+                    // A. Je volgt de host
+                    if (!empty($followingIds)) {
+                        $subQ->whereIn('user_id', $followingIds);
+                    } else {
+                        $subQ->whereRaw('0 = 1');
+                    }
 
-                // 2. Events waarvoor deze specifieke user is uitgenodigd
-                $q->orWhereHas('requests', function ($reqQuery) use ($user) {
-                    $reqQuery->where('user_id', $user->id)
-                        ->where('status', 'pending_invite'); // Zorg dat dit de juiste status is
+                    // B. OF je hebt een connectie met dit event
+                    $subQ->orWhereHas('requests', function ($reqQuery) use ($user) {
+                        $reqQuery->where('user_id', $user->id);
+                    });
                 });
 
-                // 3. Premium events (alleen als de ingelogde user zelf premium is)
-                // Let op: controleer of 'is_premium' de juiste kolomnamen zijn in je database!
-                if (isset($user->is_premium) && $user->is_premium) {
-                    $q->orWhere('is_premium', true);
-                }
+                // --- 2. ACCESS RESTRICTIE (Open, Private, Invite, Premium) ---
+                $isUserPremium = $user->is_premium ?? false;
+
+                $q->where(function ($subQ) use ($user, $isUserPremium) {
+                    // 1 & 2: Open en Private (of leeg) mogen altijd op de feed verschijnen
+                    $subQ->whereIn('access', ['open', 'private'])
+                        ->orWhereNull('access')
+
+                        // 3: Invite-only mag ALLEEN als je daadwerkelijk bent uitgenodigd
+                        ->orWhere(function ($inviteCheck) use ($user) {
+                            $inviteCheck->where('access', 'invite')
+                                ->whereHas('requests', function ($reqQuery) use ($user) {
+                                    $reqQuery->where('user_id', $user->id)
+                                        ->whereIn('status', ['pending_invite', 'accepted']);
+                                });
+                        });
+
+                    // 4: Premium mag ALLEEN worden getoond als de gebruiker zelf premium is
+                    if ($isUserPremium) {
+                        $subQ->orWhere('access', 'premium');
+                    }
+                });
+
             })
             ->with(['user' => function($q) {
                 $q->select('id', 'name', 'username', 'profile_image');
@@ -398,8 +415,6 @@ class EventController extends Controller
 
         return response()->json($pops);
     }
-
-
 
     private function maskSensitiveData($event)
     {

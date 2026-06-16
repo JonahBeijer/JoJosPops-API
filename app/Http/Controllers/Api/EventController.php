@@ -18,18 +18,19 @@ class EventController extends Controller
      * 1. Event is in de toekomst
      * 2. OF Event is al geweest, maar de ingelogde gebruiker heeft betaald/is gegaan.
      */
-    private function applyEventVisibility($query, $user = null)
+    private function applyEventVisibility($query, $user = null, $upcomingOnly = false)
     {
         return $query->where('is_active', true)
-            ->where(function ($q) use ($user) {
-                // Regel A: Event is nog niet geweest (vandaag of in de toekomst)
+            ->where(function ($q) use ($user, $upcomingOnly) {
+                // Regel A: Event is in de toekomst (of vandaag)
                 $q->where('date', '>=', now()->toDateString());
 
-                // Regel B: Event is al voorbij, maar de user heeft een ticket ('paid')
-                if ($user) {
+                // Regel B: Event is al geweest, maar user heeft betaald
+                // (Sla dit volledig over als $upcomingOnly true is!)
+                if ($user && !$upcomingOnly) {
                     $q->orWhere(function ($subQ) use ($user) {
                         $subQ->where('date', '<', now()->toDateString())
-                            ->whereHas('requests', function ($requestQuery) use ($user) { // 💡 HIER ZAT DE FOUT: popRequests is nu requests
+                            ->whereHas('requests', function ($requestQuery) use ($user) {
                                 $requestQuery->where('user_id', $user->id)
                                     ->where('status', 'paid');
                             });

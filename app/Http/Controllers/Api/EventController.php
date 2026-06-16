@@ -14,23 +14,24 @@ use Stripe\PaymentIntent;
 class EventController extends Controller
 {
     /**
-     * Helper om de query te filteren op:
+     * Veilige helper om de query te filteren op:
      * 1. Datum (in de toekomst, of betaald in het verleden)
-     * 2. Access Rules (Open, Private, Invite-only, Premium)
+     * 2. Strakke Access Rules (Open, Private, Invite-only, Premium)
      */
     private function applyEventVisibility($query, $user = null, $upcomingOnly = false)
     {
-        return $query->where('is_active', true)
+        // Gebruik 'pops.kolomnaam' om ambiguïteit in de database te voorkomen
+        return $query->where('pops.is_active', true)
 
             // --- DEEL 1: DATUM CHECK ---
             ->where(function ($q) use ($user, $upcomingOnly) {
-                // Regel A: Event is in de toekomst (of vandaag)
-                $q->where('date', '>=', now()->toDateString());
+                // Regel A: Event is in de toekomst (of vandaag) - whereDate is veiliger dan where!
+                $q->whereDate('pops.date', '>=', now()->toDateString());
 
                 // Regel B: Event is al geweest, maar user heeft betaald
                 if ($user && !$upcomingOnly) {
                     $q->orWhere(function ($subQ) use ($user) {
-                        $subQ->where('date', '<', now()->toDateString())
+                        $subQ->whereDate('pops.date', '<', now()->toDateString())
                             ->whereHas('requests', function ($requestQuery) use ($user) {
                                 $requestQuery->where('user_id', $user->id)
                                     ->whereIn('status', ['paid', 'accepted']);
@@ -42,24 +43,22 @@ class EventController extends Controller
             // --- DEEL 2: ACCESS CHECK (Beveiligt nu FYP, Index én Nearby!) ---
             ->where(function ($q) use ($user) {
                 // 1. Iedereen (ook niet-ingelogd) mag Open en Private events zien
-                $q->whereIn('access', ['open', 'private'])
-                    ->orWhereNull('access');
+                $q->whereIn('pops.access', ['open', 'private'])
+                    ->orWhereNull('pops.access');
 
-                // Als er een user is ingelogd, controleren we de speciale permissies
+                // 2. Als er een user is ingelogd, controleren we de speciale permissies
                 if ($user) {
-                    $isUserPremium = $user->is_premium ?? false;
+                    // Host mag altijd zijn eigen event zien
+                    $q->orWhere('pops.user_id', $user->id);
 
-                    // 2. De host mag natuurlijk altijd zijn eigen event zien
-                    $q->orWhere('user_id', $user->id);
-
-                    // 3. Premium events
-                    if ($isUserPremium) {
-                        $q->orWhere('access', 'premium');
+                    // Premium check
+                    if ($user->is_premium) {
+                        $q->orWhere('pops.access', 'premium');
                     }
 
-                    // 4. Invite-only events (alleen als user de juiste status heeft)
+                    // Invite-only check (alleen als user de juiste status heeft)
                     $q->orWhere(function ($inviteCheck) use ($user) {
-                        $inviteCheck->where('access', 'invite')
+                        $inviteCheck->where('pops.access', 'invite')
                             ->whereHas('requests', function ($reqQuery) use ($user) {
                                 $reqQuery->where('user_id', $user->id)
                                     ->whereIn('status', ['pending_invite', 'accepted']);
@@ -76,7 +75,8 @@ class EventController extends Controller
         $query = Pop::query();
         $query = $this->applyEventVisibility($query, $user);
 
-        $events = $query->with(['user' => function($query) {
+        $events = $query->select('pops.*') // Veilige select
+        ->with(['user' => function($query) {
             $query->select('id', 'name', 'username', 'profile_image');
         }])
             ->orderBy('date', 'asc')
@@ -150,7 +150,6 @@ class EventController extends Controller
     {
         $user = $request->user() ?? auth('sanctum')->user();
 
-        // Als je niet bent ingelogd, is je "For You" lijst leeg. Dit klopt!
         if (!$user) {
             return response()->json([]);
         }
@@ -159,13 +158,11 @@ class EventController extends Controller
         $lat = $request->lat;
         $lng = $request->lng;
 
-        // FYP Query: Kijkt nu ALLEEN nog maar naar "Waarom staat dit op je feed?"
-        // De permissies (open, invite, premium) worden verderop door de helper afgehandeld.
         $query = Pop::query()
             ->where(function ($q) use ($followingIds, $user) {
                 // A. Je volgt de host
                 if (!empty($followingIds)) {
-                    $q->whereIn('user_id', $followingIds);
+                    $q->whereIn('pops.user_id', $followingIds);
                 } else {
                     $q->whereRaw('0 = 1');
                 }
@@ -182,21 +179,13 @@ class EventController extends Controller
         // Hier filteren we automatisch de verboden invites en premium events weg
         $query = $this->applyEventVisibility($query, $user, true);
 
-        // Afstand berekenen en sorteren
+        // Veilige afstand berekening met specifieke 'pops.*' select (voorkomt SQL crashes)
         if ($lat && $lng && is_numeric($lat) && is_numeric($lng)) {
-            $query->selectRaw("
-            *,
-            (6371 * acos(
-                cos(radians(?)) *
-                cos(radians(latitude)) *
-                cos(radians(longitude) - radians(?)) +
-                sin(radians(?)) *
-                sin(radians(latitude))
-            )) AS distance
-        ", [$lat, $lng, $lat])
+            $query->select('pops.*')
+                ->selectRaw("(6371 * acos( cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)) )) AS distance", [$lat, $lng, $lat])
                 ->orderBy('distance', 'asc');
         } else {
-            $query->orderBy('date', 'asc');
+            $query->select('pops.*')->orderBy('date', 'asc');
         }
 
         $events = $query->get()->map(function($event) {
@@ -217,28 +206,18 @@ class EventController extends Controller
         $lng = $request->lng;
         $radius = $request->radius ?? 10;
 
-        // Sanctum checkt de user (als die is ingelogd) of blijft null (als die is uitgelogd)
         $user = $request->user() ?? auth('sanctum')->user();
 
         $query = Pop::query();
 
-        // Door de geüpdatete helper worden Premium en Invite-only hier nu AUTOMATISCH verborgen
-        // voor onbevoegden (en niet-ingelogde gebruikers)!
+        // Regels voor Premium en Invite worden hier ook strak toegepast
         $query = $this->applyEventVisibility($query, $user);
 
-        $pops = $query->with(['user' => function($query) {
+        $pops = $query->select('pops.*') // Voorkomt SQL crash icm met selectRaw
+        ->with(['user' => function($query) {
             $query->select('id', 'name', 'username', 'profile_image');
         }])
-            ->selectRaw("
-            *,
-            (6371 * acos(
-                cos(radians(?)) *
-                cos(radians(latitude)) *
-                cos(radians(longitude) - radians(?)) +
-                sin(radians(?)) *
-                sin(radians(latitude))
-            )) AS distance
-        ", [$lat, $lng, $lat])
+            ->selectRaw("(6371 * acos( cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)) )) AS distance", [$lat, $lng, $lat])
             ->having("distance", "<", $radius)
             ->orderBy("distance")
             ->get()

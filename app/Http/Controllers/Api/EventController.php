@@ -23,14 +23,13 @@ class EventController extends Controller
         return $query->where('is_active', true)
             ->where(function ($q) use ($user) {
                 // Regel A: Event is nog niet geweest (vandaag of in de toekomst)
-                // Als je een specifieke event_time hebt, kun je dit combineren tot een volledige timestamp.
                 $q->where('date', '>=', now()->toDateString());
 
                 // Regel B: Event is al voorbij, maar de user heeft een ticket ('paid')
                 if ($user) {
                     $q->orWhere(function ($subQ) use ($user) {
                         $subQ->where('date', '<', now()->toDateString())
-                            ->whereHas('popRequests', function ($requestQuery) use ($user) {
+                            ->whereHas('requests', function ($requestQuery) use ($user) { // 💡 HIER ZAT DE FOUT: popRequests is nu requests
                                 $requestQuery->where('user_id', $user->id)
                                     ->where('status', 'paid');
                             });

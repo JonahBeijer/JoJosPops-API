@@ -6,9 +6,26 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Friendship;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
 class FriendshipController extends Controller
 {
+    /**
+     * Helper to send push notifications via Expo
+     */
+    private function sendPushNotification($token, $title, $body, $data = [])
+    {
+        if (!$token) return;
+
+        Http::post('https://exp.host/--/api/v2/push/send', [
+            'to' => $token,
+            'title' => $title,
+            'body' => $body,
+            'data' => $data,
+            'sound' => 'default',
+        ]);
+    }
+
     /**
      * 1. Haal de lijst met geaccepteerde vrienden op (Startscherm van de app)
      */
@@ -16,7 +33,6 @@ class FriendshipController extends Controller
     {
         $user = $request->user();
 
-        // Haal alle vriendschappen op die geaccepteerd zijn en waar de ingelogde gebruiker onderdeel van is
         $friendships = Friendship::where('status', 'accepted')
             ->where(function($q) use ($user) {
                 $q->where('user_id', $user->id)
@@ -24,11 +40,8 @@ class FriendshipController extends Controller
             })
             ->get();
 
-        // Transformeer de data zodat we de gegevens van de VRIEND teruggeven, niet van onszelf
         $friends = $friendships->map(function($friendship) use ($user) {
-            // Als jij de 'user_id' bent, is de ander 'friend_id'. En vice versa.
             $friendId = ($friendship->user_id === $user->id) ? $friendship->friend_id : $friendship->user_id;
-
             $friendUser = User::find($friendId);
 
             if (!$friendUser) {
@@ -39,18 +52,13 @@ class FriendshipController extends Controller
                 'id' => $friendUser->id,
                 'name' => $friendUser->name,
                 'username' => $friendUser->username,
-                'profile_image' => $friendUser->profile_image, // 📸 TOEGEVOEGD
+                'profile_image' => $friendUser->profile_image,
                 'friendship_status' => 'accepted'
             ];
-        })->filter(); // filter() verwijdert eventuele null-waarden
+        })->filter();
 
         return response()->json(['friends' => array_values($friends->toArray())]);
     }
-
-    /**
-     * Invite a specific user to a Pop
-     */
-
 
     /**
      * 2. Zoek naar gebruikers om toe te voegen (en zie de status van je vriendschap)
@@ -58,18 +66,14 @@ class FriendshipController extends Controller
     public function search(Request $request)
     {
         $user = $request->user();
-
-        // Haal een eventuele '@' weg en zet de zoekterm om naar kleine letters
         $query = strtolower(ltrim($request->input('q'), '@'));
 
         if (blank($query)) {
             return response()->json(['users' => []]);
         }
 
-        // Zoek gebruikers op naam of username, behalve jezelf
         $users = User::where('id', '!=', $user->id)
             ->where(function($q) use ($query) {
-                // 🔥 FORCEER KLEINE LETTERS VOOR EEN 100% MATCH
                 $q->whereRaw('LOWER(name) LIKE ?', ["%{$query}%"])
                     ->orWhereRaw('LOWER(username) LIKE ?', ["%{$query}%"]);
             })
@@ -88,7 +92,6 @@ class FriendshipController extends Controller
                     if ($friendship->status === 'accepted') {
                         $status = 'accepted';
                     } else {
-                        // Kijken wie de zender was
                         $status = ($friendship->user_id === $user->id) ? 'pending_sent' : 'pending_received';
                     }
                 }
@@ -97,7 +100,7 @@ class FriendshipController extends Controller
                     'id' => $searchedUser->id,
                     'name' => $searchedUser->name,
                     'username' => $searchedUser->username,
-                    'profile_image' => $searchedUser->profile_image, // 📸 TOEGEVOEGD
+                    'profile_image' => $searchedUser->profile_image,
                     'friendship_status' => $status
                 ];
             });
@@ -117,7 +120,6 @@ class FriendshipController extends Controller
             return response()->json(['message' => 'Je kunt jezelf niet toevoegen.'], 400);
         }
 
-        // Check of er al een relatie of verzoek bestaat
         $exists = Friendship::where(function($q) use ($user, $friendId) {
             $q->where('user_id', $user->id)->where('friend_id', $friendId);
         })->orWhere(function($q) use ($user, $friendId) {
@@ -133,6 +135,15 @@ class FriendshipController extends Controller
             'friend_id' => $friendId,
             'status' => 'pending'
         ]);
+
+        // 🔥 FIRE PUSH NOTIFICATION TO THE FRIEND
+        $friendUser = User::find($friendId);
+        $this->sendPushNotification(
+            $friendUser->device_token ?? null,
+            'New Friend Request 👋',
+            "{$user->name} sent you a friend request.",
+            ['type' => 'friend_request', 'user_id' => $user->id]
+        );
 
         return response()->json(['success' => true, 'message' => 'Verzoek verzonden!']);
     }
@@ -156,6 +167,15 @@ class FriendshipController extends Controller
 
         $friendship->update(['status' => 'accepted']);
 
+        // 🔥 FIRE PUSH NOTIFICATION BACK TO SENDER
+        $senderUser = User::find($senderId);
+        $this->sendPushNotification(
+            $senderUser->device_token ?? null,
+            'Friend Request Accepted ✅',
+            "{$user->name} accepted your friend request.",
+            ['type' => 'friend_accept', 'user_id' => $user->id]
+        );
+
         return response()->json(['success' => true, 'message' => 'Vriendschap geaccepteerd!']);
     }
 
@@ -168,7 +188,6 @@ class FriendshipController extends Controller
 
         $requests = Friendship::where('friend_id', $user->id)
             ->where('status', 'pending')
-            // 📸 profile_image toegevoegd in de selectie via de relatie
             ->with('sender:id,name,username,profile_image')
             ->get()
             ->map(function($friendship) {
@@ -177,7 +196,7 @@ class FriendshipController extends Controller
                     'sender_id' => $friendship->user_id,
                     'name' => $friendship->sender->name ?? 'Onbekende Gebruiker',
                     'username' => $friendship->sender->username ?? 'gebruiker',
-                    'profile_image' => $friendship->sender->profile_image ?? null, // 📸 TOEGEVOEGD
+                    'profile_image' => $friendship->sender->profile_image ?? null,
                     'time' => $friendship->created_at ? $friendship->created_at->diffForHumans() : null
                 ];
             });
@@ -193,7 +212,6 @@ class FriendshipController extends Controller
         $user = $request->user();
         $friendId = $request->input('friend_id');
 
-        // Zoek de vriendschap op (ongeacht wie de zender of ontvanger was)
         $friendship = Friendship::where(function($q) use ($user, $friendId) {
             $q->where('user_id', $user->id)->where('friend_id', $friendId);
         })->orWhere(function($q) use ($user, $friendId) {

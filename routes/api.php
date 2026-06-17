@@ -39,6 +39,7 @@ Route::get('/place-details', function (Request $request) {
     return response()->json($response->json());
 });
 
+// Everything inside here requires a logged-in user
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
@@ -47,9 +48,18 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json($request->user());
     });
 
-    Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
+    // 🔥 MOVED HERE: The push token route is now safely authenticated
+    Route::post('/user/push-token', function (Illuminate\Http\Request $request) {
+        $request->validate(['device_token' => 'required|string']);
 
-    // Kept only the correct method
+        $user = $request->user();
+        $user->device_token = $request->device_token;
+        $user->save();
+
+        return response()->json(['message' => 'Token saved']);
+    });
+
+    Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
     Route::get('/user/invites/pending', [EventRequestController::class, 'getUserInvites']);
 
     Route::post('/pops/{id}/confirm-payment', [EventRequestController::class, 'confirmPayment']);

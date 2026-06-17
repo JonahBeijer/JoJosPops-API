@@ -6,8 +6,7 @@
     <title>JOJO'S POPS - Discover the Exclusive Pop-Up Scene</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" type="image/png" href="icon noti.png">
-    <script>
+    <link rel="icon" type="image/png" href="{{ asset('icon-noti.png') }}">    <script>
         tailwind.config = {
             theme: {
                 extend: {
@@ -46,7 +45,7 @@
     <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <div class="flex items-center gap-2">
             <img
-                src="icon-jojo.png"
+                src="{{ asset('icon-jojo.png') }}"
                 alt="JOJO'S POPS"
                 class="w-8 h-8 object-contain"
             />
@@ -124,10 +123,10 @@
                     <div class="sticky top-0 bg-white/95 backdrop-blur-sm z-20 px-5 pt-12 pb-3 border-b border-gray-100 flex justify-between items-center">
                         <div class="flex items-center gap-2">
                             <img
-                                src="icon-jojo.png"
+                                src="{{ asset('icon-jojo.png') }}"
                                 alt="JOJO'S POPS Logo"
                                 class="w-7 h-7 rounded-full object-cover"
-                            />                            <span class="text-[13px] font-black tracking-wide text-brandDark">JOJO'S <span class="text-brand">POPS</span></span>
+                            />                        <span class="text-[13px] font-black tracking-wide text-brandDark">JOJO'S <span class="text-brand">POPS</span></span>
                         </div>
                         <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                             <i class="fa-regular fa-bell text-sm text-brandDark"></i>

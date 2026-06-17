@@ -6,7 +6,7 @@
     <title>JOJO'S POPS - Discover the Exclusive Pop-Up Scene</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" type="image/png" href="{{ asset('icon-noti.png') }}">    <script>
+    <link rel="icon" type="image/png" href="{{ asset('icon noti.png') }}">    <script>
         tailwind.config = {
             theme: {
                 extend: {
@@ -47,8 +47,9 @@
             <img
                 src="{{ asset('icon-jojo.png') }}"
                 alt="JOJO'S POPS"
-                class="w-8 h-8 object-contain"
+                class="w-8 h-8 object-contain rounded-full"
             />
+        </div>
 
             <span class="text-lg font-black tracking-wider text-brandDark">
         JOJO'S <span class="text-brand">POPS</span>
@@ -67,10 +68,7 @@
 
         <!-- Pitch / Marketing Copy -->
         <div class="lg:col-span-7 space-y-8 text-center lg:text-left">
-            <div class="inline-flex items-center gap-2 bg-brand text-white px-3.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase shadow-md shadow-brand/20">
-                <span class="w-2 h-2 rounded-full bg-accentRed animate-pulse"></span>
-                Live in your city right now
-            </div>
+
 
             <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-brandDark leading-[1.05]">
                 Don't hear about it tomorrow.<br>
@@ -82,7 +80,7 @@
             </p>
 
             <div id="download" class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
-                <a href="#" class="flex items-center justify-center gap-3 bg-brandDark text-white px-8 py-3.5 rounded-xl hover:bg-black transition-all duration-200 shadow-xl shadow-black/10">
+                <a href="https://apps.apple.com/nl/app/jojos-pops/id6776246051" class="flex items-center justify-center gap-3 bg-brandDark text-white px-8 py-3.5 rounded-xl hover:bg-black transition-all duration-200 shadow-xl shadow-black/10">
                     <i class="fa-brands fa-apple text-2xl"></i>
                     <div class="text-left">
                         <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Download on the</p>
@@ -90,7 +88,7 @@
                     </div>
                 </a>
 
-                <a href="#" class="flex items-center justify-center gap-3 bg-brandLight text-brandDark border border-gray-200 px-8 py-3.5 rounded-xl hover:bg-gray-50 transition-all duration-200 shadow-lg shadow-gray-200/50">
+                <a href="https://play.google.com/store/apps/details?id=com.jojospops.app" class="flex items-center justify-center gap-3 bg-brandLight text-brandDark border border-gray-200 px-8 py-3.5 rounded-xl hover:bg-gray-50 transition-all duration-200 shadow-lg shadow-gray-200/50">
                     <i class="fa-brands fa-google-play text-xl text-brand"></i>
                     <div class="text-left">
                         <p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Get it on</p>
@@ -176,14 +174,13 @@
                             <!-- Nearby Card 2 -->
                             <div class="w-[120px] shrink-0">
                                 <div class="w-full aspect-[4/5] rounded-2xl border-2 border-premiumGold bg-gray-200 mb-2 relative overflow-hidden">
-                                    <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" alt="Food">
-                                    <div class="absolute top-2 left-2 bg-premiumLight border border-premiumGold px-1.5 py-0.5 rounded text-[7px] font-bold text-premiumText tracking-wider">PREM</div>
+                                    <img src="https://images.unsplash.com/photo-reoc0yCf67c?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" alt="Dark forest">                                    <div class="absolute top-2 left-2 bg-premiumLight border border-premiumGold px-1.5 py-0.5 rounded text-[7px] font-bold text-premiumText tracking-wider">PREM</div>
                                     <div class="absolute bottom-2 left-2 bg-black/70 px-1.5 py-0.5 rounded-md flex items-center gap-1 text-[8px] font-bold text-white">
                                         <i class="fa-solid fa-location-dot text-[7px]"></i> 1.2 km
                                     </div>
                                 </div>
                                 <p class="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">EAST END</p>
-                                <p class="text-[12px] font-extrabold text-brandDark leading-snug">Midnight Ramen Omakase</p>
+                                <p class="text-[12px] font-extrabold text-brandDark leading-snug">Rave Woods II</p>
                             </div>
                         </div>
                     </div>

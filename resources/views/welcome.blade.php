@@ -6,6 +6,7 @@
     <title>JOJO'S POPS - Discover the Exclusive Pop-Up Scene</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="icon noti.png">
     <script>
         tailwind.config = {
             theme: {
@@ -44,13 +45,16 @@
 <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
     <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <div class="flex items-center gap-2">
+            <img
+                src="icon-jojo.png"
+                alt="JOJO'S POPS"
+                class="w-8 h-8 object-contain"
+            />
+
             <span class="text-lg font-black tracking-wider text-brandDark">
-                JOJO'S <span class="text-brand">POPS</span>
-            </span>
+        JOJO'S <span class="text-brand">POPS</span>
+    </span>
         </div>
-        <a href="#download" class="bg-brand text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-brand/20 hover:bg-brand/90 transition-all duration-200">
-            Get Early Access
-        </a>
     </div>
 </nav>
 
@@ -119,8 +123,11 @@
                     <!-- App Header -->
                     <div class="sticky top-0 bg-white/95 backdrop-blur-sm z-20 px-5 pt-12 pb-3 border-b border-gray-100 flex justify-between items-center">
                         <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 bg-brand rounded-full flex items-center justify-center text-white text-[10px] font-black">JP</div>
-                            <span class="text-[13px] font-black tracking-wide text-brandDark">JOJO'S <span class="text-brand">POPS</span></span>
+                            <img
+                                src="icon-jojo.png"
+                                alt="JOJO'S POPS Logo"
+                                class="w-7 h-7 rounded-full object-cover"
+                            />                            <span class="text-[13px] font-black tracking-wide text-brandDark">JOJO'S <span class="text-brand">POPS</span></span>
                         </div>
                         <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                             <i class="fa-regular fa-bell text-sm text-brandDark"></i>

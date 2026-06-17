@@ -6,7 +6,7 @@
     <title>JOJO'S POPS - Discover the Exclusive Pop-Up Scene</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" type="image/png" href="{{ asset('icon noti.png') }}">    <script>
+    <link rel="icon" type="image/png" href="{{ asset('icon-noti.png') }}">    <script>
         tailwind.config = {
             theme: {
                 extend: {
@@ -174,7 +174,7 @@
                             <!-- Nearby Card 2 -->
                             <div class="w-[120px] shrink-0">
                                 <div class="w-full aspect-[4/5] rounded-2xl border-2 border-premiumGold bg-gray-200 mb-2 relative overflow-hidden">
-                                    <img src="https://images.unsplash.com/photo-reoc0yCf67c?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" alt="Dark forest">                                    <div class="absolute top-2 left-2 bg-premiumLight border border-premiumGold px-1.5 py-0.5 rounded text-[7px] font-bold text-premiumText tracking-wider">PREM</div>
+                                    <img src="https://images.unsplash.com/photo-1641667838410-b257ca266e38?auto=format&fit=crop&w=600&q=80" class="w-full h-full object-cover" alt="Dark forest">                                    <div class="absolute top-2 left-2 bg-premiumLight border border-premiumGold px-1.5 py-0.5 rounded text-[7px] font-bold text-premiumText tracking-wider">PREM</div>
                                     <div class="absolute bottom-2 left-2 bg-black/70 px-1.5 py-0.5 rounded-md flex items-center gap-1 text-[8px] font-bold text-white">
                                         <i class="fa-solid fa-location-dot text-[7px]"></i> 1.2 km
                                     </div>

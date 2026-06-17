@@ -288,24 +288,36 @@ class EventController extends Controller
             'access' => 'nullable|string',
             'reveal_time' => 'nullable|date',
             'images' => 'nullable|array',
+            'kept_images' => 'nullable|array',
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
         ]);
 
-        if ($request->hasFile('images')) {
-            if (!empty($pop->images)) {
-                foreach ($pop->images as $oldPath) {
-                    Storage::disk('public')->delete($oldPath);
-                }
-            }
+        // 1. Haal de oude foto's op (als array)
+        $oldImages = is_array($pop->images) ? $pop->images : (json_decode($pop->images, true) ?? []);
 
-            $storedPaths = [];
+        // 2. Haal de foto's op die de gebruiker wil BEHOUDEN (gestuurd vanuit frontend)
+        $keptImages = $request->input('kept_images', []);
+
+        // 3. Wat niet in keptImages zit, moet VERWIJDERD worden
+        $imagesToDelete = array_diff($oldImages, $keptImages);
+        foreach ($imagesToDelete as $oldPath) {
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        // 4. Start de definitieve lijst met de foto's die we behouden
+        $finalImages = $keptImages;
+
+        // 5. Upload gloednieuwe foto's
+        if ($request->hasFile('images')) {
             foreach ($request->file('images') as $file) {
                 $path = $file->store('pops', 'public');
-                $storedPaths[] = $path;
+                $finalImages[] = $path;
             }
-            $validated['images'] = $storedPaths;
         }
+
+        $validated['images'] = $finalImages;
+        unset($validated['kept_images']); // Verwijder uit validatie array voor we updaten
 
         if (isset($validated['access'])) {
             $validated['is_active'] = $pop->is_active ?? true;
@@ -331,7 +343,8 @@ class EventController extends Controller
 
         try {
             if (!empty($pop->images)) {
-                foreach ($pop->images as $path) {
+                $imagesArray = is_array($pop->images) ? $pop->images : (json_decode($pop->images, true) ?? []);
+                foreach ($imagesArray as $path) {
                     Storage::disk('public')->delete($path);
                 }
             }

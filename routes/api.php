@@ -48,8 +48,10 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
+
+    // Kept only the correct method
     Route::get('/user/invites/pending', [EventRequestController::class, 'getUserInvites']);
-    Route::get('/user/invites/pending', [EventRequestController::class, 'getPendingInvites']);
+
     Route::post('/pops/{id}/confirm-payment', [EventRequestController::class, 'confirmPayment']);
     Route::post('/pops/{id}/confirm-ticket', [EventController::class, 'confirmTicket']);
     Route::post('/profile/sync-premium', [ProfileController::class, 'syncPremium']);

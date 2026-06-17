@@ -235,31 +235,40 @@ class EventRequestController extends Controller
     /**
      * Ophalen van uitnodigingen die JIJ hebt ontvangen van een host
      */
+    /**
+     * Fetch invites that YOU have received from a host
+     */
+    /**
+     * Ophalen van uitnodigingen die JIJ hebt ontvangen van een host
+     */
     public function getUserInvites(Request $request)
     {
         $userId = $request->user()->id;
 
-        $invites = PopRequest::where('user_id', $userId)
-            // 🔥 FIX: Omdat VIP rules nu actief zijn in EventController, is het veilig
-            // om alleen echte invites (pending_invite) hier in the inbox te tonen.
-            // Hierdoor spam je jezelf niet meer met je eigen open-event join-requests!
+        // 🔥 OPLOSSING: Geen complexe SQL whereHas() meer.
+        // We halen de data puur op basis van user_id en filteren de ontbrekende relaties met PHP.
+        $invites = PopRequest::with(['pop.user'])
+            ->where('user_id', $userId)
             ->where('status', 'pending_invite')
-            ->whereHas('pop.user')
-            ->with(['pop.user'])
             ->orderBy('created_at', 'desc')
             ->get()
+            ->filter(function ($req) {
+                // Failsafe: controleer of de pop en de host nog bestaan in de database
+                return $req->pop !== null && $req->pop->user !== null;
+            })
             ->map(function ($req) {
                 return [
                     'id' => $req->id,
                     'pop_id' => $req->pop_id,
-                    'user_id' => $req->pop->user_id,
+                    'user_id' => $req->pop->user_id, // De host
                     'name' => $req->pop->user->name,
                     'username' => $req->pop->user->username,
                     'pop_title' => $req->pop->title,
                     'profile_image' => $req->pop->user->profile_image,
                     'status' => $req->status
                 ];
-            });
+            })
+            ->values(); // 🔥 CRUCIAAL: Zorgt dat de React Native app een Array [...] krijgt in plaats van een Object {...}
 
         return response()->json(['invites' => $invites]);
     }

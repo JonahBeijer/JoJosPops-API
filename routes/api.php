@@ -25,7 +25,6 @@ Route::post('/verify-registration', [AuthController::class, 'verifyRegistration'
 // Wachtwoord Vergeten Flow
 // In routes/api.php
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/forgot-password/', [AuthController::class, 'forgotPassword']); // ✅ Deze extra regel vangt de slash-redirect op
 Route::post('/reset-password', [AuthController::class, 'resetPassword']); // NIEUW
 
 Route::get('/places', function (Request $request) {

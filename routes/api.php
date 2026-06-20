@@ -10,11 +10,21 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\FriendshipController;
 
+// ==========================================
+// PUBLIEKE ROUTES (Geen login vereist)
+// ==========================================
+
 Route::get('/pops/nearby', [EventController::class, 'nearby']);
 Route::get('/pops', [EventController::class, 'index']);
 
+// Authenticatie & Registratie
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/verify-registration', [AuthController::class, 'verifyRegistration']); // NIEUW
+
+// Wachtwoord Vergeten Flow
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']); // NIEUW
+Route::post('/reset-password', [AuthController::class, 'resetPassword']); // NIEUW
 
 Route::get('/places', function (Request $request) {
     $query = $request->input('q');
@@ -39,8 +49,15 @@ Route::get('/place-details', function (Request $request) {
     return response()->json($response->json());
 });
 
-// Everything inside here requires a logged-in user
+
+// ==========================================
+// BEVEILIGDE ROUTES (Login vereist)
+// ==========================================
+
 Route::middleware('auth:sanctum')->group(function () {
+
+    // 2-Staps Verificatie (Leest het tijdelijke login token)
+    Route::post('/verify-2fa', [AuthController::class, 'verify2FA']); // NIEUW
 
     Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
 
@@ -86,4 +103,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users/{id}/unfollow', [FollowController::class, 'unfollow']);
 });
 
+// Zorg dat deze onderaan staat, anders vangt hij 'nearby' of 'fyp' af als ID
 Route::get('/pops/{id}', [EventController::class, 'show']);

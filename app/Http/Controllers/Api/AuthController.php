@@ -6,102 +6,204 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function login(Request $request)
+    // --- HULPFUNCTIE: Genereer en stuur een 6-cijferige code ---
+    private function generateAndSendOTP(User $user, $subject)
     {
-        // 1. Validatie van de binnenkomende app-aanvraag
-        $request->validate([
-            'username' => 'required|string',
-            'password' => 'required|string',
-        ]);
+        $otp = sprintf("%06d", mt_rand(1, 999999));
 
-        // 2. Zoek flexibel: match op de username kolom OF de email kolom
-        $user = User::where('username', $request->username)
-            ->orWhere('email', $request->username)
-            ->first();
+        $user->otp_code = $otp;
+        $user->otp_expires_at = now()->addMinutes(10); // Code is 10 minuten geldig
+        $user->save();
 
-        // 3. Matched het wachtwoord met de bcrypt hash in de database?
-        if (! $user || ! Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'message' => 'De ingevoerde gebruikersnaam of het wachtwoord is onjuist.'
-            ], 422);
-        }
-
-        // 5. Genereer een nieuw tokensysteem via Sanctum
-        $token = $user->createToken('app_auth_token')->plainTextToken;
-
-        // 6. Stuur het token terug naar Expo SecureStore
-        return response()->json([
-            'message' => 'Succesvol ingelogd! 👋',
-            'access_token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'username' => $user->username,
-                'email' => $user->email,
-                'profile_image' => $user->profile_image, // ✅ Toegevoegd zodat login ook direct de foto heeft
-            ]
-        ], 200);
+        // Let op: configureer je MAIL_ instellingen in je .env bestand!
+        Mail::raw("Je verificatiecode is: {$otp}\n\nDeze code is 10 minuten geldig.", function ($message) use ($user, $subject) {
+            $message->to($user->email)->subject($subject);
+        });
     }
+
+    // ==========================================
+    // 1. REGISTRATIE & VERIFICATIE
+    // ==========================================
 
     public function register(Request $request)
     {
-        // 1. Valideer de invoer streng en vang unieke velden af
         $request->validate([
             'name' => 'required|string|max:255',
             'username' => 'required|string|alpha_dash|max:50|unique:users,username',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // ✅ Toegevoegd voor de profielfoto validatie
-        ], [
-            'username.unique' => 'Deze gebruikersnaam is helaas al bezet.',
-            'email.unique' => 'Dit e-mailadres is al in gebruik.',
-            'password.min' => 'Het wachtwoord moet minimaal 8 tekens bevatten.',
-            'username.alpha_dash' => 'Je gebruikersnaam mag alleen letters, cijfers, streepjes of underscores bevatten.'
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        // 🚀 NIEUW: Verwerk de afbeelding als deze is meegestuurd
         $profileImagePath = null;
         if ($request->hasFile('image')) {
-            // Sla de foto op in storage/app/public/profiles
             $profileImagePath = $request->file('image')->store('profiles', 'public');
         }
 
-        // 2. Maak de gebruiker aan in de database
         $user = User::create([
             'name' => $request->name,
             'username' => $request->username,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'profile_image' => $profileImagePath, // ✅ Sla het gegenereerde pad op in de database!
+            'profile_image' => $profileImagePath,
+            'email_verified_at' => null, // Nog niet geverifieerd
         ]);
 
-        // 3. Genereer direct een Sanctum API-token
-        $token = $user->createToken('app_auth_token')->plainTextToken;
+        // Genereer code en stuur mail
+        $this->generateAndSendOTP($user, 'Verifieer je account voor JoJo\'s Pops');
 
-        // 4. Stuur successtatus, het token en de user data terug
+        // Stuur GEEN token terug, we gaan eerst naar Stap 2 in de app
         return response()->json([
-            'message' => 'Account succesvol aangemaakt! 🚀',
-            'access_token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'username' => $user->username,
-                'email' => $user->email,
-                'profile_image' => $user->profile_image, // ✅ Stuur het pad mee terug naar Expo
-            ]
+            'message' => 'Account aangemaakt. Controleer je e-mail voor de code.',
         ], 201);
     }
+
+    public function verifyRegistration(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || $user->otp_code !== $request->code || now()->gt($user->otp_expires_at)) {
+            return response()->json(['message' => 'Code is onjuist of verlopen.'], 422);
+        }
+
+        // Code klopt! Markeer als geverifieerd en wis de code
+        $user->email_verified_at = now();
+        $user->otp_code = null;
+        $user->otp_expires_at = null;
+        $user->save();
+
+        // Genereer het échte token
+        $token = $user->createToken('app_auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Account succesvol geverifieerd! 🚀',
+            'access_token' => $token,
+            'user' => $user
+        ], 200);
+    }
+
+    // ==========================================
+    // 2. LOGIN & 2FA
+    // ==========================================
+
+    public function login(Request $request)
+    {
+        $request->validate([
+            'username' => 'required|string',
+            'password' => 'required|string',
+        ]);
+
+        $user = User::where('username', $request->username)
+            ->orWhere('email', $request->username)
+            ->first();
+
+        if (! $user || ! Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'De ingevoerde gebruikersnaam of het wachtwoord is onjuist.'], 422);
+        }
+
+        // Genereer 2FA code en stuur mail
+        $this->generateAndSendOTP($user, 'Je 2-staps verificatie inlogcode');
+
+        // Maak een TIJDELIJK token aan met beperkte rechten (alleen om 2fa te verifiëren)
+        $tempToken = $user->createToken('temp_2fa', ['verify-2fa'])->plainTextToken;
+
+        return response()->json([
+            'message' => 'Inloggegevens kloppen. Voer 2FA code in.',
+            'requires_2fa' => true,
+            'temp_token' => $tempToken
+        ], 200);
+    }
+
+    public function verify2FA(Request $request)
+    {
+        $request->validate(['code' => 'required|string|size:6']);
+        $user = $request->user(); // Komt uit Sanctum middleware
+
+        // Zorg dat ze het tijdelijke token gebruiken
+        if (!$user->tokenCan('verify-2fa')) {
+            return response()->json(['message' => 'Ongeldig token type.'], 403);
+        }
+
+        if ($user->otp_code !== $request->code || now()->gt($user->otp_expires_at)) {
+            return response()->json(['message' => 'Code is onjuist of verlopen.'], 422);
+        }
+
+        // Code klopt! Wis code en verwijder tijdelijk token
+        $user->otp_code = null;
+        $user->otp_expires_at = null;
+        $user->save();
+
+        $user->currentAccessToken()->delete();
+
+        // Maak het échte, volledige token aan
+        $token = $user->createToken('app_auth_token', ['*'])->plainTextToken;
+
+        return response()->json([
+            'message' => 'Succesvol ingelogd! 👋',
+            'access_token' => $token,
+            'user' => $user
+        ], 200);
+    }
+
+    // ==========================================
+    // 3. WACHTWOORD VERGETEN
+    // ==========================================
+
+    public function forgotPassword(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            // Om veiligheidsredenen zeggen we altijd 'Verzonden', ook als het adres niet bestaat
+            return response()->json(['message' => 'Als het e-mailadres bekend is, hebben we een code gestuurd.'], 200);
+        }
+
+        $this->generateAndSendOTP($user, 'Wachtwoord Herstellen');
+
+        return response()->json(['message' => 'Als het e-mailadres bekend is, hebben we een code gestuurd.'], 200);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+            'password' => 'required|string|min:8'
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || $user->otp_code !== $request->code || now()->gt($user->otp_expires_at)) {
+            return response()->json(['message' => 'Code is onjuist of verlopen.'], 422);
+        }
+
+        // Update wachtwoord en wis code
+        $user->password = Hash::make($request->password);
+        $user->otp_code = null;
+        $user->otp_expires_at = null;
+        $user->save();
+
+        return response()->json(['message' => 'Wachtwoord is succesvol gewijzigd. Je kunt nu inloggen.'], 200);
+    }
+
+    // ==========================================
+    // 4. UITLOGGEN
+    // ==========================================
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-
-        return response()->json([
-            'message' => 'Succesvol uitgelogd.'
-        ], 200);
+        return response()->json(['message' => 'Succesvol uitgelogd.'], 200);
     }
 }

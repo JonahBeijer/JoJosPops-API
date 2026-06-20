@@ -49,6 +49,12 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url(env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
+        // 👇 VOEG DIT BLOKJE TOE 👇
+        'mailtrap' => [
+            'transport' => 'mailtrap',
+        ],
+        // 👆 EINDE NIEUW BLOKJE 👆
+
         'ses' => [
             'transport' => 'ses',
         ],

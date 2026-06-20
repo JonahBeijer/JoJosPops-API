@@ -120,12 +120,11 @@ class EventController extends Controller
             }
         }
 
-        $eventDate = Carbon::parse($event->date);
-        $isPastEvent = $eventDate->isPast() && !$eventDate->isToday();
-
-        if (!$event->is_active || ($isPastEvent && !$hasPaid)) {
+        // We checken alleen nog of het event inactief/verwijderd is.
+        // Oude events mogen nu gewoon bekeken worden!
+        if (!$event->is_active) {
             return response()->json([
-                'message' => 'Dit event is afgelopen en alleen toegankelijk voor bezoekers.'
+                'message' => 'Dit event is niet meer actief.'
             ], 403);
         }
 

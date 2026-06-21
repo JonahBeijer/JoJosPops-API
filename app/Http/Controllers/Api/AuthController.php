@@ -6,41 +6,28 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Http; // ✅ Toegevoegd om de Resend API aan te roepen
-use Illuminate\Support\Facades\Log;  // ✅ Toegevoegd om eventuele fouten vast te leggen
+use Illuminate\Support\Facades\Mail; // Terug naar de standaard Mail facade
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
     // ==========================================
-    // 1. WACHTWOORD VERGETEN & RESETTEN (Nieuw)
+    // 1. WACHTWOORD VERGETEN & RESETTEN
     // ==========================================
 
-    // Hulpfunctie: Genereer de 6-cijferige code en stuur deze via Resend HTTP API
     private function generateAndSendOTP(User $user, $subject)
     {
-        // Genereer een nette 6-cijferige code
         $otp = sprintf("%06d", mt_rand(1, 999999));
 
         $user->otp_code = $otp;
-        $user->otp_expires_at = now()->addMinutes(15); // Code is 15 minuten geldig
+        $user->otp_expires_at = now()->addMinutes(15);
         $user->save();
 
-        // 🚀 OPLOSSING: We strippen aanhalingstekens van de API key, sturen 'to' als string, en voegen HTML toe.
-        $apiKey = trim(env('MAIL_PASSWORD'), '"\' ');
-
-        $response = Http::withToken($apiKey)
-            ->post('https://api.resend.com/emails', [
-                'from' => 'JoJos Pops <onboarding@resend.dev>', // Zonder apostrof in de naam
-                'to' => $user->email, // Als enkele string, niet als array
-                'subject' => $subject,
-                'html' => "<p>Je verificatiecode is: <strong>{$otp}</strong></p><p>Deze code is 15 minuten geldig.</p>",
-            ]);
-
-        // Foutafhandeling voor debugging
-        if (!$response->successful()) {
-            Log::error('Resend API Fout: ' . $response->body());
-        }
+        // 🚀 OPLOSSING: We gebruiken gewoon Laravel's eigen Mail systeem.
+        // Via Gmail gaat dit feilloos langs de restricties van Railway.
+        Mail::raw("Je verificatiecode is: {$otp}\n\nDeze code is 15 minuten geldig.", function ($message) use ($user, $subject) {
+            $message->to($user->email)->subject($subject);
+        });
     }
 
     public function forgotPassword(Request $request)
@@ -50,13 +37,11 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            // Veiligheid: Geef altijd 'succes' terug zodat hackers niet kunnen raden welke e-mails bestaan.
             return response()->json([
                 'message' => 'Als het e-mailadres bekend is, hebben we een code gestuurd.'
             ], 200);
         }
 
-        // Genereer de code en stuur de mail
         $this->generateAndSendOTP($user, 'Wachtwoord Herstellen - JoJo\'s Pops');
 
         return response()->json([
@@ -74,14 +59,12 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        // Controleer of de gebruiker bestaat, of de code klopt en of deze niet verlopen is
         if (!$user || $user->otp_code !== $request->code || now()->gt($user->otp_expires_at)) {
             return response()->json([
                 'message' => 'De ingevoerde code is onjuist of verlopen.'
             ], 422);
         }
 
-        // Update het wachtwoord en wis de OTP-gegevens
         $user->password = Hash::make($request->password);
         $user->otp_code = null;
         $user->otp_expires_at = null;
@@ -93,33 +76,28 @@ class AuthController extends Controller
     }
 
     // ==========================================
-    // 2. INLOGGEN, REGISTREREN & UITLOGGEN (Origineel)
+    // 2. INLOGGEN, REGISTREREN & UITLOGGEN
     // ==========================================
 
     public function login(Request $request)
     {
-        // 1. Validatie van de binnenkomende app-aanvraag
         $request->validate([
             'username' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        // 2. Zoek flexibel: match op de username kolom OF de email kolom
         $user = User::where('username', $request->username)
             ->orWhere('email', $request->username)
             ->first();
 
-        // 3. Matched het wachtwoord met de bcrypt hash in de database?
         if (! $user || ! Hash::check($request->password, $user->password)) {
             return response()->json([
                 'message' => 'De ingevoerde gebruikersnaam of het wachtwoord is onjuist.'
             ], 422);
         }
 
-        // 5. Genereer een nieuw tokensysteem via Sanctum
         $token = $user->createToken('app_auth_token')->plainTextToken;
 
-        // 6. Stuur het token terug naar Expo SecureStore
         return response()->json([
             'message' => 'Succesvol ingelogd! 👋',
             'access_token' => $token,
@@ -128,20 +106,19 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'username' => $user->username,
                 'email' => $user->email,
-                'profile_image' => $user->profile_image, // ✅ Toegevoegd zodat login ook direct de foto heeft
+                'profile_image' => $user->profile_image,
             ]
         ], 200);
     }
 
     public function register(Request $request)
     {
-        // 1. Valideer de invoer streng en vang unieke velden af
         $request->validate([
             'name' => 'required|string|max:255',
             'username' => 'required|string|alpha_dash|max:50|unique:users,username',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // ✅ Toegevoegd voor de profielfoto validatie
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ], [
             'username.unique' => 'Deze gebruikersnaam is helaas al bezet.',
             'email.unique' => 'Dit e-mailadres is al in gebruik.',
@@ -149,26 +126,21 @@ class AuthController extends Controller
             'username.alpha_dash' => 'Je gebruikersnaam mag alleen letters, cijfers, streepjes of underscores bevatten.'
         ]);
 
-        // 🚀 NIEUW: Verwerk de afbeelding als deze is meegestuurd
         $profileImagePath = null;
         if ($request->hasFile('image')) {
-            // Sla de foto op in storage/app/public/profiles
             $profileImagePath = $request->file('image')->store('profiles', 'public');
         }
 
-        // 2. Maak de gebruiker aan in de database
         $user = User::create([
             'name' => $request->name,
             'username' => $request->username,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'profile_image' => $profileImagePath, // ✅ Sla het gegenereerde pad op in de database!
+            'profile_image' => $profileImagePath,
         ]);
 
-        // 3. Genereer direct een Sanctum API-token
         $token = $user->createToken('app_auth_token')->plainTextToken;
 
-        // 4. Stuur successtatus, het token en de user data terug
         return response()->json([
             'message' => 'Account succesvol aangemaakt! 🚀',
             'access_token' => $token,
@@ -177,7 +149,7 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'username' => $user->username,
                 'email' => $user->email,
-                'profile_image' => $user->profile_image, // ✅ Stuur het pad mee terug naar Expo
+                'profile_image' => $user->profile_image,
             ]
         ], 201);
     }

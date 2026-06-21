@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail; // Terug naar de standaard Mail facade
+use Illuminate\Support\Facades\Mail; // ✅ De standaard mailer weer terug!
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -23,8 +23,7 @@ class AuthController extends Controller
         $user->otp_expires_at = now()->addMinutes(15);
         $user->save();
 
-        // 🚀 OPLOSSING: We gebruiken gewoon Laravel's eigen Mail systeem.
-        // Via Gmail gaat dit feilloos langs de restricties van Railway.
+        // 🚀 OPLOSSING: We sturen de mail nu netjes via SendGrid op poort 2525
         Mail::raw("Je verificatiecode is: {$otp}\n\nDeze code is 15 minuten geldig.", function ($message) use ($user, $subject) {
             $message->to($user->email)->subject($subject);
         });

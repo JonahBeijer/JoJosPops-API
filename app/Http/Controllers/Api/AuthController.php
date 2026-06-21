@@ -6,7 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail; // ✅ Toegevoegd voor het versturen van e-mails
+use Illuminate\Support\Facades\Http; // ✅ Toegevoegd om de Resend API aan te roepen
+use Illuminate\Support\Facades\Log;  // ✅ Toegevoegd om eventuele fouten vast te leggen
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -15,7 +16,7 @@ class AuthController extends Controller
     // 1. WACHTWOORD VERGETEN & RESETTEN (Nieuw)
     // ==========================================
 
-    // Hulpfunctie: Genereer de 6-cijferige code en stuur deze via Resend
+    // Hulpfunctie: Genereer de 6-cijferige code en stuur deze via Resend HTTP API
     private function generateAndSendOTP(User $user, $subject)
     {
         // Genereer een nette 6-cijferige code
@@ -25,10 +26,19 @@ class AuthController extends Controller
         $user->otp_expires_at = now()->addMinutes(15); // Code is 15 minuten geldig
         $user->save();
 
-        // Verstuur de mail (Resend wordt automatisch gebruikt via je .env instellingen)
-        Mail::raw("Je verificatiecode is: {$otp}\n\nDeze code is 15 minuten geldig.", function ($message) use ($user, $subject) {
-            $message->to($user->email)->subject($subject);
-        });
+        // 🚀 OPLOSSING: Gebruik de Resend API via HTTP in plaats van SMTP (omzeilt Railway time-outs)
+        $response = Http::withToken(env('MAIL_PASSWORD'))
+            ->post('https://api.resend.com/emails', [
+                'from' => env('MAIL_FROM_NAME', "JoJo's Pops") . ' <' . env('MAIL_FROM_ADDRESS', 'onboarding@resend.dev') . '>',
+                'to' => [$user->email],
+                'subject' => $subject,
+                'text' => "Je verificatiecode is: {$otp}\n\nDeze code is 15 minuten geldig.",
+            ]);
+
+        // Optioneel: Log een fout als Resend de mail weigert (handig voor debugging)
+        if (!$response->successful()) {
+            Log::error('Resend API Fout: ' . $response->body());
+        }
     }
 
     public function forgotPassword(Request $request)

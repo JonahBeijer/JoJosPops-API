@@ -26,10 +26,11 @@ class AuthController extends Controller
         $user->otp_expires_at = now()->addMinutes(15); // Code is 15 minuten geldig
         $user->save();
 
-        // 🚀 OPLOSSING: Gebruik de Resend API via HTTP in plaats van SMTP (omzeilt Railway time-outs)
+        // 🚀 OPLOSSING: We sturen uitsluitend het e-mailadres mee als afzender
+        // om de 500-crash door de apostrof in "JoJo's Pops" te voorkomen.
         $response = Http::withToken(env('MAIL_PASSWORD'))
             ->post('https://api.resend.com/emails', [
-                'from' => env('MAIL_FROM_NAME', "JoJo's Pops") . ' <' . env('MAIL_FROM_ADDRESS', 'onboarding@resend.dev') . '>',
+                'from' => 'onboarding@resend.dev',
                 'to' => [$user->email],
                 'subject' => $subject,
                 'text' => "Je verificatiecode is: {$otp}\n\nDeze code is 15 minuten geldig.",

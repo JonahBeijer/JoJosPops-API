@@ -7,16 +7,10 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
-// 1. Aangepast: Laadt nu de Blade view in plaats van de Inertia render
 Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
-Route::middleware(['auth'])->group(function () {
-    Route::get('dashboard', function () {
-        return Inertia::render('dashboard');
-    })->name('dashboard');
-});
 
 Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::get('/reports', [AdminController::class, 'index'])->name('admin.reports');

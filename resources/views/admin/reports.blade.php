@@ -36,8 +36,7 @@
             </span>
         </div>
         <div>
-            <!-- Je kunt hier een logout knop toevoegen -->
-            <span class="text-sm font-semibold text-gray-500">Beveiligde Omgeving</span>
+            <span class="text-sm font-semibold text-gray-500">Secure Environment</span>
         </div>
     </div>
 </nav>
@@ -46,8 +45,8 @@
 <main class="max-w-7xl mx-auto px-6 py-10 w-full flex-1">
 
     <div class="mb-8">
-        <h1 class="text-3xl font-black text-brandDark">Actieve Meldingen</h1>
-        <p class="text-gray-500 mt-2 font-medium">Beheer hier alle gerapporteerde gebruikers en pop-ups.</p>
+        <h1 class="text-3xl font-black text-brandDark">Active Reports</h1>
+        <p class="text-gray-500 mt-2 font-medium">Manage all reported users and pop-ups here.</p>
     </div>
 
     @if(session('success'))
@@ -60,11 +59,11 @@
         <table class="w-full text-left border-collapse">
             <thead>
             <tr class="bg-gray-50 border-b border-gray-100 text-sm uppercase tracking-widest text-gray-500">
-                <th class="p-4 font-bold">Datum</th>
-                <th class="p-4 font-bold">Melder</th>
-                <th class="p-4 font-bold">Type</th>
-                <th class="p-4 font-bold">Reden / Info</th>
-                <th class="p-4 font-bold text-right">Acties</th>
+                <th class="p-4 font-bold">Date</th>
+                <th class="p-4 font-bold">Reporter</th>
+                <th class="p-4 font-bold">Target</th>
+                <th class="p-4 font-bold">Reason / Info</th>
+                <th class="p-4 font-bold text-right">Actions</th>
             </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -74,13 +73,21 @@
                         {{ $report->created_at->format('d M Y, H:i') }}
                     </td>
                     <td class="p-4 text-sm font-bold text-brandDark">
-                        {{ $report->reporter->name ?? 'Verwijderde Gebruiker' }}
+                        {{ $report->reporter->name ?? 'Deleted User' }}
                     </td>
                     <td class="p-4">
                         @if($report->target_type === 'pop')
-                            <span class="bg-brandLight text-brand px-2.5 py-1 rounded-md text-xs font-black tracking-wider uppercase">Pop-up (#{{ $report->target_id }})</span>
+                            {{-- Fetch the Pop dynamically --}}
+                            @php $targetPop = \App\Models\Pop::find($report->target_id); @endphp
+                            <span class="bg-brandLight text-brand px-2.5 py-1 rounded-md text-xs font-black tracking-wider uppercase inline-block">
+                                [Pop #{{ $report->target_id }}] {{ $targetPop->title ?? 'Deleted Pop-up' }}
+                            </span>
                         @else
-                            <span class="bg-gray-200 text-gray-700 px-2.5 py-1 rounded-md text-xs font-black tracking-wider uppercase">User (#{{ $report->target_id }})</span>
+                            {{-- Fetch the User dynamically --}}
+                            @php $targetUser = \App\Models\User::find($report->target_id); @endphp
+                            <span class="bg-gray-200 text-gray-700 px-2.5 py-1 rounded-md text-xs font-black tracking-wider uppercase inline-block">
+                                [User #{{ $report->target_id }}] {{ $targetUser->username ?? 'Deleted User' }}
+                            </span>
                         @endif
                     </td>
                     <td class="p-4">
@@ -91,24 +98,24 @@
                     </td>
                     <td class="p-4 flex items-center justify-end gap-2">
 
-                        <!-- Negeer / Opgelost -->
+                        <!-- Resolve -->
                         <form action="{{ route('admin.reports.resolve', $report->id) }}" method="POST">
                             @csrf @method('PATCH')
                             <button type="submit" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
-                                <i class="fa-solid fa-check mr-1"></i> Negeer
+                                <i class="fa-solid fa-check mr-1"></i> Resolve
                             </button>
                         </form>
 
-                        <!-- Verwijder Actie (Afhankelijk van het type) -->
+                        <!-- Delete Action (Depends on target type) -->
                         @if($report->target_type === 'pop')
-                            <form action="{{ route('admin.pops.delete', $report->target_id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je deze pop-up wilt verwijderen?');">
+                            <form action="{{ route('admin.pops.delete', $report->target_id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this pop-up?');">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="bg-accentRed/10 hover:bg-accentRed text-accentRed hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
-                                    <i class="fa-solid fa-trash mr-1"></i> Verwijder Pop
+                                    <i class="fa-solid fa-trash mr-1"></i> Delete Pop
                                 </button>
                             </form>
                         @else
-                            <form action="{{ route('admin.users.delete', $report->target_id) }}" method="POST" onsubmit="return confirm('Weet je zeker dat je deze GEBRUIKER volledig wilt verbannen?');">
+                            <form action="{{ route('admin.users.delete', $report->target_id) }}" method="POST" onsubmit="return confirm('Are you sure you want to completely BAN this user?');">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="bg-black hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
                                     <i class="fa-solid fa-user-slash mr-1"></i> Ban User
@@ -122,7 +129,7 @@
                 <tr>
                     <td colspan="5" class="p-8 text-center text-gray-400 font-medium">
                         <i class="fa-regular fa-face-smile text-3xl mb-3"></i>
-                        <p>Geen openstaande meldingen. Alles is veilig!</p>
+                        <p>No pending reports. Everything is safe!</p>
                     </td>
                 </tr>
             @endforelse

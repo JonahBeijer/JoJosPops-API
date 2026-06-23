@@ -15,13 +15,20 @@ use App\Http\Controllers\Api\FriendshipController;
 // PUBLIEKE ROUTES (Geen login vereist)
 // ==========================================
 
+// ==========================================
+// PUBLIEKE ROUTES (Geen login vereist)
+// ==========================================
+
 Route::get('/pops/nearby', [EventController::class, 'nearby']);
 Route::get('/pops', [EventController::class, 'index']);
 
 // Authenticatie & Registratie
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp']); // ✅ Zet hem hier, buiten de middleware!
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/verify-registration', [AuthController::class, 'verifyRegistration']); // NIEUW
+Route::post('/verify-registration', [AuthController::class, 'verifyRegistration']);
+
+
 
 // Wachtwoord Vergeten Flow
 // In routes/api.php

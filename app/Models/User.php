@@ -24,7 +24,9 @@ class User extends Authenticatable
         'email',
         'password',
         'profile_image',
-        'stripe_account_id'
+        'stripe_account_id',
+        'otp_code',         // 👈 Voeg deze toe
+        'otp_expires_at'    // 👈 Voeg deze toe
     ];
 
     /**

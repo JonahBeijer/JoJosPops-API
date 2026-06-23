@@ -6,20 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Http; // Zorg dat deze bovenin staat!
+use Illuminate\Support\Facades\Http;
+
 class AuthController extends Controller
 {
     // ==========================================
-    // 1. WACHTWOORD VERGETEN & RESETTEN (Magic Link)
+    // 1. WACHTWOORD VERGETEN & RESETTEN
     // ==========================================
 
     public function forgotPassword(Request $request)
     {
         $request->validate(['email' => 'required|email']);
-
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
@@ -33,29 +32,9 @@ class AuthController extends Controller
         );
 
         $resetLink = "jojospops://reset-password?token={$token}&email={$user->email}";
+        $this->sendMailgun($user->email, "Wachtwoord Herstellen - JoJo's Pops", "Hoi {$user->name},\n\nKlik op de link om je wachtwoord te resetten:\n\n{$resetLink}\n\nDeze link is 60 minuten geldig.");
 
-        // Variabelen veilig ophalen uit Railway .env
-        $domain = env('MAILGUN_DOMAIN');
-        $secret = env('MAILGUN_SECRET');
-        $from = env('MAIL_FROM_ADDRESS');
-        $name = env('MAIL_FROM_NAME');
-
-        // De API-aanroep naar Mailgun
-        $response = Http::withBasicAuth('api', $secret)
-            ->asForm() // Dit lost het "from parameter missing" probleem op
-            ->post("https://api.mailgun.net/v3/{$domain}/messages", [
-                'from'    => "{$name} <{$from}>",
-                'to'      => $user->email,
-                'subject' => 'Wachtwoord Herstellen - JoJo\'s Pops',
-                'text'    => "Hoi {$user->name},\n\nKlik op de onderstaande link om je wachtwoord te resetten:\n\n{$resetLink}\n\nDeze link is 60 minuten geldig."
-            ]);
-
-        if ($response->successful()) {
-            return response()->json(['message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'], 200);
-        } else {
-            \Log::error("Mailgun API Error: " . $response->body());
-            return response()->json(['message' => 'E-mail kon niet worden verzonden.'], 500);
-        }
+        return response()->json(['message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'], 200);
     }
 
     public function resetPassword(Request $request)
@@ -66,132 +45,126 @@ class AuthController extends Controller
             'password' => 'required|string|min:8'
         ]);
 
-        // 1. Zoek de token in de database
         $resetRecord = DB::table('password_reset_tokens')
             ->where('email', $request->email)
             ->where('token', $request->token)
             ->first();
 
-        if (!$resetRecord) {
-            return response()->json([
-                'message' => 'Deze reset link is ongeldig of verlopen.'
-            ], 422);
+        if (!$resetRecord || now()->subMinutes(60)->gt($resetRecord->created_at)) {
+            return response()->json(['message' => 'Link is ongeldig of verlopen.'], 422);
         }
 
-        // 2. Optioneel: Check of de token niet ouder is dan 60 minuten
-        if (now()->subMinutes(60)->gt($resetRecord->created_at)) {
-            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
-            return response()->json([
-                'message' => 'Deze reset link is verlopen.'
-            ], 422);
-        }
-
-        // 3. Update het wachtwoord van de gebruiker
         $user = User::where('email', $request->email)->first();
-
         if ($user) {
-            $user->password = Hash::make($request->password);
-
-            // Verwijder oude OTP velden voor de zekerheid als ze nog in de DB stonden
-            $user->otp_code = null;
-            $user->otp_expires_at = null;
-
-            $user->save();
+            $user->update([
+                'password' => Hash::make($request->password),
+                'otp_code' => null,
+                'otp_expires_at' => null
+            ]);
         }
 
-        // 4. Ruim de gebruikte token op uit de database
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();
 
-        return response()->json([
-            'message' => 'Wachtwoord is succesvol gewijzigd. Je kunt nu inloggen!'
-        ], 200);
+        return response()->json(['message' => 'Wachtwoord succesvol gewijzigd.'], 200);
     }
 
     // ==========================================
-    // 2. INLOGGEN, REGISTREREN & UITLOGGEN
+    // 2. INLOGGEN MET 2FA
     // ==========================================
 
     public function login(Request $request)
     {
-        $request->validate([
-            'username' => 'required|string',
-            'password' => 'required|string',
-        ]);
+        $request->validate(['username' => 'required', 'password' => 'required']);
 
-        $user = User::where('username', $request->username)
-            ->orWhere('email', $request->username)
-            ->first();
+        $user = User::where('username', $request->username)->orWhere('email', $request->username)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'message' => 'De ingevoerde gebruikersnaam of het wachtwoord is onjuist.'
-            ], 422);
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'Gegevens onjuist.'], 422);
         }
 
+        // Genereer OTP
+        $otp = rand(100000, 999999);
+        $user->update([
+            'otp_code' => Hash::make($otp),
+            'otp_expires_at' => now()->addMinutes(10)
+        ]);
+
+        // Verstuur 2FA mail
+        $this->sendMailgun($user->email, "Jouw 2FA Code", "Hoi {$user->name}, je 2FA code is: {$otp}. Deze is 10 minuten geldig.");
+
+        return response()->json(['message' => '2FA code verzonden naar je e-mail.', 'requires_2fa' => true], 200);
+    }
+
+    public function verifyOtp(Request $request)
+    {
+        $request->validate(['username' => 'required', 'otp' => 'required']);
+        $user = User::where('username', $request->username)->orWhere('email', $request->username)->first();
+
+        if (!$user || !$user->otp_code || !Hash::check($request->otp, $user->otp_code) || now()->gt($user->otp_expires_at)) {
+            return response()->json(['message' => 'Code onjuist of verlopen.'], 422);
+        }
+
+        // Reset OTP en geef token
+        $user->update(['otp_code' => null, 'otp_expires_at' => null]);
         $token = $user->createToken('app_auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Succesvol ingelogd! 👋',
+            'message' => 'Succesvol ingelogd!',
             'access_token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'username' => $user->username,
-                'email' => $user->email,
-                'profile_image' => $user->profile_image,
-            ]
+            'user' => $user
         ], 200);
     }
+
+    // ==========================================
+    // 3. REGISTREREN & LOGOUT
+    // ==========================================
 
     public function register(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'username' => 'required|string|alpha_dash|max:50|unique:users,username',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ], [
-            'username.unique' => 'Deze gebruikersnaam is helaas al bezet.',
-            'email.unique' => 'Dit e-mailadres is al in gebruik.',
-            'password.min' => 'Het wachtwoord moet minimaal 8 tekens bevatten.',
-            'username.alpha_dash' => 'Je gebruikersnaam mag alleen letters, cijfers, streepjes of underscores bevatten.'
+            'name' => 'required',
+            'username' => 'required|unique:users',
+            'email' => 'required|email|unique:users',
+            'password' => 'required|min:8'
         ]);
-
-        $profileImagePath = null;
-        if ($request->hasFile('image')) {
-            $profileImagePath = $request->file('image')->store('profiles', 'public');
-        }
 
         $user = User::create([
             'name' => $request->name,
             'username' => $request->username,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'profile_image' => $profileImagePath,
+            'password' => Hash::make($request->password)
         ]);
 
-        $token = $user->createToken('app_auth_token')->plainTextToken;
-
         return response()->json([
-            'message' => 'Account succesvol aangemaakt! 🚀',
-            'access_token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'username' => $user->username,
-                'email' => $user->email,
-                'profile_image' => $user->profile_image,
-            ]
+            'access_token' => $user->createToken('app_auth_token')->plainTextToken,
+            'user' => $user
         ], 201);
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
+        return response()->json(['message' => 'Succesvol uitgelogd.'], 200);
+    }
 
-        return response()->json([
-            'message' => 'Succesvol uitgelogd.'
-        ], 200);
+    // ==========================================
+    // 4. HULPFUNCTIE MAILGUN (DRY)
+    // ==========================================
+
+    private function sendMailgun($to, $subject, $text)
+    {
+        $domain = env('MAILGUN_DOMAIN');
+        $secret = env('MAILGUN_SECRET');
+        $from = env('MAIL_FROM_ADDRESS');
+        $name = env('MAIL_FROM_NAME');
+
+        Http::withBasicAuth('api', $secret)
+            ->asForm()
+            ->post("https://api.mailgun.net/v3/{$domain}/messages", [
+                'from'    => "{$name} <{$from}>",
+                'to'      => $to,
+                'subject' => $subject,
+                'text'    => $text
+            ]);
     }
 }

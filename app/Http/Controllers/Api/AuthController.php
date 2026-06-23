@@ -44,7 +44,7 @@ class AuthController extends Controller
 
         // 3. Maak de Deep Link voor je Expo App
         // Let op: 'jojopops' moet exact overeenkomen met het 'scheme' in je app.json
-        $resetLink = "jojopops://reset-password?token={$token}&email={$user->email}";
+        $resetLink = "jojospops://reset-password?token={$token}&email={$user->email}";
 
         // 4. Stuur de mail netjes via je mailer
         Mail::raw("Hoi {$user->name},\n\nKlik op de onderstaande link om je wachtwoord te resetten:\n\n{$resetLink}\n\nDeze link is 60 minuten geldig.", function ($message) use ($user) {

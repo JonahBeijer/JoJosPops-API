@@ -6,28 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail; // ✅ De standaard mailer weer terug!
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
     // ==========================================
-    // 1. WACHTWOORD VERGETEN & RESETTEN
+    // 1. WACHTWOORD VERGETEN & RESETTEN (Magic Link)
     // ==========================================
-
-    private function generateAndSendOTP(User $user, $subject)
-    {
-        $otp = sprintf("%06d", mt_rand(1, 999999));
-
-        $user->otp_code = $otp;
-        $user->otp_expires_at = now()->addMinutes(15);
-        $user->save();
-
-        // 🚀 OPLOSSING: We sturen de mail nu netjes via SendGrid op poort 2525
-        Mail::raw("Je verificatiecode is: {$otp}\n\nDeze code is 15 minuten geldig.", function ($message) use ($user, $subject) {
-            $message->to($user->email)->subject($subject);
-        });
-    }
 
     public function forgotPassword(Request $request)
     {
@@ -35,16 +22,37 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
+        // Voor veiligheid geven we altijd een succesmelding terug,
+        // zelfs als het e-mailadres niet bestaat (voorkomt scraping).
         if (!$user) {
             return response()->json([
-                'message' => 'Als het e-mailadres bekend is, hebben we een code gestuurd.'
+                'message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'
             ], 200);
         }
 
-        $this->generateAndSendOTP($user, 'Wachtwoord Herstellen - JoJo\'s Pops');
+        // 1. Genereer een veilige random token
+        $token = Str::random(60);
+
+        // 2. Sla op in de standaard Laravel reset tabel
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $user->email],
+            [
+                'token' => $token,
+                'created_at' => now()
+            ]
+        );
+
+        // 3. Maak de Deep Link voor je Expo App
+        // Let op: 'jojopops' moet exact overeenkomen met het 'scheme' in je app.json
+        $resetLink = "jojopops://reset-password?token={$token}&email={$user->email}";
+
+        // 4. Stuur de mail netjes via je mailer
+        Mail::raw("Hoi {$user->name},\n\nKlik op de onderstaande link om je wachtwoord te resetten:\n\n{$resetLink}\n\nDeze link is 60 minuten geldig.", function ($message) use ($user) {
+            $message->to($user->email)->subject("Wachtwoord Herstellen - JoJo's Pops");
+        });
 
         return response()->json([
-            'message' => 'Als het e-mailadres bekend is, hebben we een code gestuurd.'
+            'message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'
         ], 200);
     }
 
@@ -52,25 +60,48 @@ class AuthController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
-            'code' => 'required|string|size:6',
+            'token' => 'required|string',
             'password' => 'required|string|min:8'
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        // 1. Zoek de token in de database
+        $resetRecord = DB::table('password_reset_tokens')
+            ->where('email', $request->email)
+            ->where('token', $request->token)
+            ->first();
 
-        if (!$user || $user->otp_code !== $request->code || now()->gt($user->otp_expires_at)) {
+        if (!$resetRecord) {
             return response()->json([
-                'message' => 'De ingevoerde code is onjuist of verlopen.'
+                'message' => 'Deze reset link is ongeldig of verlopen.'
             ], 422);
         }
 
-        $user->password = Hash::make($request->password);
-        $user->otp_code = null;
-        $user->otp_expires_at = null;
-        $user->save();
+        // 2. Optioneel: Check of de token niet ouder is dan 60 minuten
+        if (now()->subMinutes(60)->gt($resetRecord->created_at)) {
+            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+            return response()->json([
+                'message' => 'Deze reset link is verlopen.'
+            ], 422);
+        }
+
+        // 3. Update het wachtwoord van de gebruiker
+        $user = User::where('email', $request->email)->first();
+
+        if ($user) {
+            $user->password = Hash::make($request->password);
+
+            // Verwijder oude OTP velden voor de zekerheid als ze nog in de DB stonden
+            $user->otp_code = null;
+            $user->otp_expires_at = null;
+
+            $user->save();
+        }
+
+        // 4. Ruim de gebruikte token op uit de database
+        DB::table('password_reset_tokens')->where('email', $request->email)->delete();
 
         return response()->json([
-            'message' => 'Wachtwoord is succesvol gewijzigd. Je kunt nu inloggen.'
+            'message' => 'Wachtwoord is succesvol gewijzigd. Je kunt nu inloggen!'
         ], 200);
     }
 

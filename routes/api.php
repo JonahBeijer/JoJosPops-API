@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Api\EventRequestController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\ReportController;
@@ -43,14 +42,7 @@ Route::get('/places', function (Request $request) {
     return response()->json($response->json());
 });
 
-Route::middleware(['auth'])->prefix('admin')->group(function () {
-    Route::get('/reports', [AdminController::class, 'index'])->name('admin.reports');
-    Route::patch('/reports/{id}/resolve', [AdminController::class, 'resolveReport'])->name('admin.reports.resolve');
 
-    // Verwijder routes
-    Route::delete('/pops/{id}', [AdminController::class, 'deletePop'])->name('admin.pops.delete');
-    Route::delete('/users/{id}', [AdminController::class, 'deleteUser'])->name('admin.users.delete');
-});
 
 Route::get('/place-details', function (Request $request) {
     $placeId = $request->input('place_id');

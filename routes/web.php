@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\User;
@@ -17,6 +18,14 @@ Route::middleware(['auth'])->group(function () {
     })->name('dashboard');
 });
 
+Route::middleware(['auth'])->prefix('admin')->group(function () {
+    Route::get('/reports', [AdminController::class, 'index'])->name('admin.reports');
+    Route::patch('/reports/{id}/resolve', [AdminController::class, 'resolveReport'])->name('admin.reports.resolve');
+
+    // Verwijder routes
+    Route::delete('/pops/{id}', [AdminController::class, 'deletePop'])->name('admin.pops.delete');
+    Route::delete('/users/{id}', [AdminController::class, 'deleteUser'])->name('admin.users.delete');
+});
 
 // 2. Aangepast: Strakke Tailwind styling voor de verwijder-pagina
 Route::get('/delete-account', function () {

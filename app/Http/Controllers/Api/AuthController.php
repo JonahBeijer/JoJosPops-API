@@ -22,29 +22,23 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        // Voor veiligheid geven we altijd een succesmelding terug
         if (!$user) {
-            return response()->json([
-                'message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'
-            ], 200);
+            return response()->json(['message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'], 200);
         }
 
         $token = Str::random(60);
 
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
-            [
-                'token' => $token,
-                'created_at' => now()
-            ]
+            ['token' => $token, 'created_at' => now()]
         );
 
         $resetLink = "jojospops://reset-password?token={$token}&email={$user->email}";
 
-        // --- DIRECTE API CALL NAAR MAILGUN ---
+        // Gebruik env() variabelen. Deze staan veilig in Railway, niet in je GitHub code!
         $domain = env('MAILGUN_DOMAIN');
         $secret = env('MAILGUN_SECRET');
-        $fromAddress = "postmaster@" . $domain;
+        $fromAddress = env('MAIL_FROM_ADDRESS');
 
         $response = Http::withBasicAuth('api', $secret)
             ->post("https://api.mailgun.net/v3/{$domain}/messages", [
@@ -55,15 +49,10 @@ class AuthController extends Controller
             ]);
 
         if ($response->successful()) {
-            return response()->json([
-                'message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'
-            ], 200);
+            return response()->json(['message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'], 200);
         } else {
-            // Log de fout voor debuggen in Railway
             \Log::error("Mailgun API Error: " . $response->body());
-            return response()->json([
-                'message' => 'Er is een probleem met de mailserver, probeer het later opnieuw.'
-            ], 500);
+            return response()->json(['message' => 'E-mail kon niet worden verzonden.'], 500);
         }
     }
 

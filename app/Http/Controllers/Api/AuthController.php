@@ -27,7 +27,6 @@ class AuthController extends Controller
         }
 
         $token = Str::random(60);
-
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
             ['token' => $token, 'created_at' => now()]
@@ -35,14 +34,17 @@ class AuthController extends Controller
 
         $resetLink = "jojospops://reset-password?token={$token}&email={$user->email}";
 
-        // Gebruik env() variabelen. Deze staan veilig in Railway, niet in je GitHub code!
+        // Variabelen veilig ophalen uit Railway .env
         $domain = env('MAILGUN_DOMAIN');
         $secret = env('MAILGUN_SECRET');
-        $fromAddress = env('MAIL_FROM_ADDRESS');
+        $from = env('MAIL_FROM_ADDRESS');
+        $name = env('MAIL_FROM_NAME');
 
+        // De API-aanroep naar Mailgun
         $response = Http::withBasicAuth('api', $secret)
+            ->asForm() // Dit lost het "from parameter missing" probleem op
             ->post("https://api.mailgun.net/v3/{$domain}/messages", [
-                'from'    => "JoJo's Pops <{$fromAddress}>",
+                'from'    => "{$name} <{$from}>",
                 'to'      => $user->email,
                 'subject' => 'Wachtwoord Herstellen - JoJo\'s Pops',
                 'text'    => "Hoi {$user->name},\n\nKlik op de onderstaande link om je wachtwoord te resetten:\n\n{$resetLink}\n\nDeze link is 60 minuten geldig."

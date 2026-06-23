@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-
+use Illuminate\Support\Facades\Http; // Zorg dat deze bovenin staat!
 class AuthController extends Controller
 {
     // ==========================================
@@ -23,39 +23,35 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            return response()->json([
-                'message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'
-            ], 200);
+            return response()->json(['message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'], 200);
         }
 
         $token = Str::random(60);
 
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
-            [
-                'token' => $token,
-                'created_at' => now()
-            ]
+            ['token' => $token, 'created_at' => now()]
         );
 
         $resetLink = "jojospops://reset-password?token={$token}&email={$user->email}";
 
-        // --- DEZE CONFIGURATIE FORCEERT MAILGUN GEBRUIK ---
-        config([
-            'mail.mailers.mailgun.domain' => env('MAILGUN_DOMAIN'),
-            'mail.mailers.mailgun.secret' => env('MAILGUN_SECRET'),
-            'mail.default' => 'mailgun',
-        ]);
+        // --- DIRECTE API CALL NAAR MAILGUN (Omzeilt alle Mailer-configuratie) ---
+        $domain = env('MAILGUN_DOMAIN');
+        $secret = env('MAILGUN_SECRET');
 
-        Mail::raw("Hoi {$user->name},\n\nKlik op de onderstaande link om je wachtwoord te resetten:\n\n{$resetLink}\n\nDeze link is 60 minuten geldig.", function ($message) use ($user) {
-            $message->to($user->email)
-                ->from(env('MAIL_FROM_ADDRESS'), env('MAIL_FROM_NAME'))
-                ->subject("Wachtwoord Herstellen - JoJo's Pops");
-        });
+        $response = Http::withBasicAuth('api', $secret)
+            ->post("https://api.mailgun.net/v3/{$domain}/messages", [
+                'from'    => env('MAIL_FROM_ADDRESS'),
+                'to'      => $user->email,
+                'subject' => 'Wachtwoord Herstellen - JoJo\'s Pops',
+                'text'    => "Hoi {$user->name},\n\nKlik op de onderstaande link om je wachtwoord te resetten:\n\n{$resetLink}\n\nDeze link is 60 minuten geldig."
+            ]);
 
-        return response()->json([
-            'message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'
-        ], 200);
+        if ($response->successful()) {
+            return response()->json(['message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'], 200);
+        } else {
+            return response()->json(['message' => 'E-mail kon niet worden verzonden.'], 500);
+        }
     }
 
     public function resetPassword(Request $request)

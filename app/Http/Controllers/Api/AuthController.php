@@ -22,18 +22,14 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        // Voor veiligheid geven we altijd een succesmelding terug,
-        // zelfs als het e-mailadres niet bestaat (voorkomt scraping).
         if (!$user) {
             return response()->json([
                 'message' => 'Als het e-mailadres bekend is, hebben we een link gestuurd.'
             ], 200);
         }
 
-        // 1. Genereer een veilige random token
         $token = Str::random(60);
 
-        // 2. Sla op in de standaard Laravel reset tabel
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
             [
@@ -42,13 +38,19 @@ class AuthController extends Controller
             ]
         );
 
-        // 3. Maak de Deep Link voor je Expo App
-        // Let op: 'jojopops' moet exact overeenkomen met het 'scheme' in je app.json
         $resetLink = "jojospops://reset-password?token={$token}&email={$user->email}";
 
-        // 4. Stuur de mail netjes via je mailer
+        // --- DEZE CONFIGURATIE FORCEERT MAILGUN GEBRUIK ---
+        config([
+            'mail.mailers.mailgun.domain' => env('MAILGUN_DOMAIN'),
+            'mail.mailers.mailgun.secret' => env('MAILGUN_SECRET'),
+            'mail.default' => 'mailgun',
+        ]);
+
         Mail::raw("Hoi {$user->name},\n\nKlik op de onderstaande link om je wachtwoord te resetten:\n\n{$resetLink}\n\nDeze link is 60 minuten geldig.", function ($message) use ($user) {
-            $message->to($user->email)->subject("Wachtwoord Herstellen - JoJo's Pops");
+            $message->to($user->email)
+                ->from(env('MAIL_FROM_ADDRESS'), env('MAIL_FROM_NAME'))
+                ->subject("Wachtwoord Herstellen - JoJo's Pops");
         });
 
         return response()->json([

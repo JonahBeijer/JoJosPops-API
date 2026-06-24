@@ -31,6 +31,10 @@ class Pop extends Model
 
         // Premium activatie
         'is_active',
+
+        // Veiligheid (NIEUW) 🛡️
+        'has_first_aider',
+        'has_security',
     ];
 
     protected $casts = [
@@ -43,8 +47,10 @@ class Pop extends Model
         'is_ticketed' => 'boolean',
         'ticket_price' => 'decimal:2',
 
-        // Premium activatie
+        // Premium activatie & Veiligheid (NIEUW)
         'is_active' => 'boolean',
+        'has_first_aider' => 'boolean',
+        'has_security' => 'boolean',
     ];
 
     public function user()

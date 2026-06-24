@@ -290,6 +290,8 @@ class EventController extends Controller
             'kept_images' => 'nullable|array',
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
+            'has_first_aider' => 'nullable|boolean', // 👈 Nieuw
+            'has_security' => 'nullable|boolean',    // 👈 Nieuw
         ]);
 
         // 1. Haal de oude foto's op (als array)
@@ -380,6 +382,8 @@ class EventController extends Controller
             'images' => 'nullable|array',
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
+            'has_first_aider' => 'nullable|boolean', // 👈 Nieuw
+            'has_security' => 'nullable|boolean',    // 👈 Nieuw
         ]);
 
         $validated['user_id'] = $request->user()->id;

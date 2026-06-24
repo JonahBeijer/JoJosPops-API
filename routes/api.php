@@ -15,26 +15,20 @@ use App\Http\Controllers\Api\FriendshipController;
 // PUBLIEKE ROUTES (Geen login vereist)
 // ==========================================
 
-// ==========================================
-// PUBLIEKE ROUTES (Geen login vereist)
-// ==========================================
-
 Route::get('/pops/nearby', [EventController::class, 'nearby']);
 Route::get('/pops', [EventController::class, 'index']);
 
 // Authenticatie & Registratie
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/verify-otp', [AuthController::class, 'verifyOtp']); // ✅ Zet hem hier, buiten de middleware!
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp']); // ✅ Staat goed!
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-registration', [AuthController::class, 'verifyRegistration']);
 
-
-
 // Wachtwoord Vergeten Flow
-// In routes/api.php
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/reset-password', [AuthController::class, 'resetPassword']); // NIEUW
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
+// Google Places
 Route::get('/places', function (Request $request) {
     $query = $request->input('q');
     if (!$query) {
@@ -49,8 +43,6 @@ Route::get('/places', function (Request $request) {
     return response()->json($response->json());
 });
 
-
-
 Route::get('/place-details', function (Request $request) {
     $placeId = $request->input('place_id');
     $response = Http::get('https://maps.googleapis.com/maps/api/place/details/json', [
@@ -60,36 +52,30 @@ Route::get('/place-details', function (Request $request) {
     return response()->json($response->json());
 });
 
-
 // ==========================================
 // BEVEILIGDE ROUTES (Login vereist)
 // ==========================================
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    // 2-Staps Verificatie (Leest het tijdelijke login token)
-    Route::post('/verify-2fa', [AuthController::class, 'verify2FA']); // NIEUW
-
     Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
 
     Route::get('/user', function (Request $request) {
         return response()->json($request->user());
     });
+
     Route::post('/reports', [ReportController::class, 'store']);
-    // 🔥 MOVED HERE: The push token route is now safely authenticated
+
     Route::post('/user/push-token', function (Illuminate\Http\Request $request) {
         $request->validate(['device_token' => 'required|string']);
-
         $user = $request->user();
         $user->device_token = $request->device_token;
         $user->save();
-
         return response()->json(['message' => 'Token saved']);
     });
 
     Route::post('/pops/{id}/invite', [EventRequestController::class, 'inviteGuest']);
     Route::get('/user/invites/pending', [EventRequestController::class, 'getUserInvites']);
-
     Route::post('/pops/{id}/confirm-payment', [EventRequestController::class, 'confirmPayment']);
     Route::post('/pops/{id}/confirm-ticket', [EventController::class, 'confirmTicket']);
     Route::post('/profile/sync-premium', [ProfileController::class, 'syncPremium']);

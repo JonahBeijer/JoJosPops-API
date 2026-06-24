@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Hash; // 💡 Toegevoegd voor wachtwoordcontrole!
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -28,14 +29,13 @@ class ProfileController extends Controller
             ->orderBy('date', 'desc')
             ->get();
 
-        // 2. 🚀 Haal de pops op waar deze gebruiker naar TOE GAAT
-        // (Dus waarvoor hij in PopRequest de status 'accepted' of 'paid' heeft)
+        // 2. Haal de pops op waar deze gebruiker naar TOE GAAT
         $goingPops = Pop::whereHas('requests', function($query) use ($user) {
             $query->where('user_id', $user->id)
                 ->whereIn('status', ['accepted', 'paid']);
         })
-            ->where('is_active', true) // Check optioneel of het event niet verwijderd is
-            ->orderBy('date', 'asc') // Sorteer op datum zodat de eerste de volgende is
+            ->where('is_active', true)
+            ->orderBy('date', 'asc')
             ->get();
 
         return response()->json([
@@ -46,7 +46,7 @@ class ProfileController extends Controller
                 'profile_image' => $user->profile_image
             ],
             'my_pops' => $myPops,
-            'going' => $goingPops // 👈 Hier sturen we de goede going lijst terug!
+            'going' => $goingPops
         ], 200);
     }
 
@@ -189,6 +189,55 @@ class ProfileController extends Controller
                 'username' => $user->username,
                 'profile_image' => $path
             ]
+        ], 200);
+    }
+
+    // ==========================================
+    // 💡 NIEUW: EMAIL WIJZIGEN (Voor Mobiele App)
+    // ==========================================
+    public function updateEmail(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'current_password' => 'required'
+        ]);
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'Huidig wachtwoord is onjuist.'], 403);
+        }
+
+        $user->email = $request->email;
+        $user->save();
+
+        return response()->json([
+            'message' => 'E-mailadres succesvol gewijzigd.',
+            'user' => $user
+        ], 200);
+    }
+
+    // ==========================================
+    // 💡 NIEUW: WACHTWOORD WIJZIGEN (Voor Mobiele App)
+    // ==========================================
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'Huidig wachtwoord is onjuist.'], 403);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Wachtwoord succesvol gewijzigd.'
         ], 200);
     }
 }

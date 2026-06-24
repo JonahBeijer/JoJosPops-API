@@ -96,6 +96,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar']);
+    Route::put('/profile/email', [ProfileController::class, 'updateEmail']);
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
     Route::post('/users/{id}/follow', [FollowController::class, 'follow']);
     Route::post('/users/{id}/unfollow', [FollowController::class, 'unfollow']);
 });

@@ -141,6 +141,65 @@ class AuthController extends Controller
         ], 201);
     }
 
+    // Zorg dat dit bovenaan je ProfileController.php staat:
+    // use Illuminate\Support\Facades\Hash;
+    // use Illuminate\Http\Request;
+
+    // ==========================================
+    // EMAIL WIJZIGEN
+    // ==========================================
+    public function updateEmail(Request $request)
+    {
+        $user = $request->user();
+
+        // 1. Valideer de input. De email moet uniek zijn, behalve voor de huidige gebruiker.
+        $request->validate([
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'current_password' => 'required'
+        ]);
+
+        // 2. Controleer of het ingevulde huidige wachtwoord klopt
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'Huidig wachtwoord is onjuist.'], 403);
+        }
+
+        // 3. Sla het nieuwe e-mailadres op
+        $user->email = $request->email;
+        $user->save();
+
+        return response()->json([
+            'message' => 'E-mailadres succesvol gewijzigd.',
+            'user' => $user
+        ], 200);
+    }
+
+    // ==========================================
+    // WACHTWOORD WIJZIGEN
+    // ==========================================
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        // 1. Valideer de input. 'confirmed' zoekt automatisch naar 'password_confirmation' in het request.
+        $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        // 2. Controleer of het ingevulde huidige wachtwoord klopt
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'Huidig wachtwoord is onjuist.'], 403);
+        }
+
+        // 3. Hash het nieuwe wachtwoord en sla het op
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Wachtwoord succesvol gewijzigd.'
+        ], 200);
+    }
+
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();

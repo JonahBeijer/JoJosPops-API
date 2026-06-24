@@ -151,6 +151,10 @@ class AuthController extends Controller
     // 4. HULPFUNCTIE MAILGUN (DRY)
     // ==========================================
 
+    // ==========================================
+    // 4. HULPFUNCTIE MAILGUN (DRY) - GECORRIGEERD VOOR EU
+    // ==========================================
+
     private function sendMailgun($to, $subject, $text)
     {
         $domain = env('MAILGUN_DOMAIN');
@@ -158,9 +162,13 @@ class AuthController extends Controller
         $from = env('MAIL_FROM_ADDRESS');
         $name = env('MAIL_FROM_NAME');
 
+        // 💡 FIX: Haal het juiste endpoint op (en gebruik de US-server als fallback)
+        $endpoint = env('MAILGUN_ENDPOINT', 'api.mailgun.net');
+
+        // 💡 FIX: De URL maakt nu dynamisch gebruik van het juiste endpoint
         Http::withBasicAuth('api', $secret)
             ->asForm()
-            ->post("https://api.mailgun.net/v3/{$domain}/messages", [
+            ->post("https://{$endpoint}/v3/{$domain}/messages", [
                 'from'    => "{$name} <{$from}>",
                 'to'      => $to,
                 'subject' => $subject,

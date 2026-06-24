@@ -24,13 +24,15 @@ class EventController extends Controller
 
             // --- DEEL 1: DATUM CHECK ---
             ->where(function ($q) use ($user, $upcomingOnly) {
-                // Regel A: Event is in de toekomst (of vandaag)
-                $q->where('date', '>=', now()->toDateString());
+                // Regel A: Event is in de toekomst (of vandaag) of heeft nog geen datum
+                $q->whereDate('date', '>=', now()->toDateString())
+                    ->orWhereNull('date');
 
                 // Regel B: Event is al geweest, maar user heeft betaald
+                // (Wordt alleen gebruikt op profiel/tickets pagina's als $upcomingOnly false is)
                 if ($user && !$upcomingOnly) {
                     $q->orWhere(function ($subQ) use ($user) {
-                        $subQ->where('date', '<', now()->toDateString())
+                        $subQ->whereDate('date', '<', now()->toDateString())
                             ->whereHas('requests', function ($requestQuery) use ($user) {
                                 $requestQuery->where('user_id', $user->id)
                                     ->whereIn('status', ['paid', 'accepted']);
@@ -41,7 +43,7 @@ class EventController extends Controller
 
             // --- DEEL 2: ACCESS CHECK (Beveiligt nu FYP, Index én Nearby!) ---
             ->where(function ($q) use ($user) {
-                // 1. Iedereen (ook niet-ingelogd) mag Open en Private events zien
+                // 1. Iedereen (ook niet-ingelogd) mag Open en Private events ALTIJD zien
                 $q->whereIn('access', ['open', 'private', 'Open', 'Private'])
                     ->orWhereNull('access');
 
@@ -49,11 +51,10 @@ class EventController extends Controller
                     // 2. Host mag altijd zijn eigen event zien
                     $q->orWhere('user_id', $user->id);
 
-                    // 3. 🔥 DE VIP PASS: Als je een invite hebt gekregen (of al geaccepteerd/betaald hebt),
-                    // overruled dit ALLES en mag je de pop altijd op Home en Nearby zien!
+                    // 3. 🔥 DE VIP PASS: Als je ge-invite bent, mag je invite-only events zien
                     $q->orWhereHas('requests', function ($reqQuery) use ($user) {
                         $reqQuery->where('user_id', $user->id)
-                            ->whereIn('status', ['pending_invite', 'accepted', 'paid']);
+                            ->whereIn('status', ['invited', 'pending_invite', 'accepted', 'paid', 'requested']);
                     });
 
                     // 4. Premium check
@@ -62,7 +63,6 @@ class EventController extends Controller
                     }
                 }
             });
-
     }
 
     public function index(Request $request)
@@ -70,7 +70,8 @@ class EventController extends Controller
         $user = $request->user() ?? auth('sanctum')->user();
 
         $query = Pop::query();
-        $query = $this->applyEventVisibility($query, $user);
+        // Index feed: verberg oude events (true)
+        $query = $this->applyEventVisibility($query, $user, true);
 
         $events = $query->with(['user' => function($query) {
             $query->select('id', 'name', 'username', 'profile_image');
@@ -120,8 +121,6 @@ class EventController extends Controller
             }
         }
 
-        // We checken alleen nog of het event inactief/verwijderd is.
-        // Oude events mogen nu gewoon bekeken worden!
         if (!$event->is_active) {
             return response()->json([
                 'message' => 'Dit event is niet meer actief.'
@@ -162,7 +161,7 @@ class EventController extends Controller
                     $q->whereRaw('0 = 1');
                 }
 
-                // B. OF je hebt een connectie met dit event
+                // B. OF je hebt een connectie met dit event (bijv. invite gekregen van onbekende)
                 $q->orWhereHas('requests', function ($reqQuery) use ($user) {
                     $reqQuery->where('user_id', $user->id);
                 });
@@ -205,8 +204,8 @@ class EventController extends Controller
 
         $query = Pop::query();
 
-        // Regels voor Premium en Invite worden hier ook strak toegepast
-        $query = $this->applyEventVisibility($query, $user);
+        // 👈 Gebruik TRUE zodat oude events absoluut verborgen blijven in Trending Nearby!
+        $query = $this->applyEventVisibility($query, $user, true);
 
         $pops = $query->select('*')
             ->with(['user' => function($query) {
@@ -240,7 +239,6 @@ class EventController extends Controller
         Stripe::setApiKey(env('STRIPE_SECRET'));
 
         $ticketPriceInCents = (int) round($pop->ticket_price * 100);
-        $applicationFeeInCents = (int) round($ticketPriceInCents * 0.15);
 
         try {
             $paymentIntent = PaymentIntent::create([
@@ -290,26 +288,20 @@ class EventController extends Controller
             'kept_images' => 'nullable|array',
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
-            'has_first_aider' => 'nullable|boolean', // 👈 Nieuw
-            'has_security' => 'nullable|boolean',    // 👈 Nieuw
+            'has_first_aider' => 'nullable|boolean',
+            'has_security' => 'nullable|boolean',
         ]);
 
-        // 1. Haal de oude foto's op (als array)
         $oldImages = is_array($pop->images) ? $pop->images : (json_decode($pop->images, true) ?? []);
-
-        // 2. Haal de foto's op die de gebruiker wil BEHOUDEN (gestuurd vanuit frontend)
         $keptImages = $request->input('kept_images', []);
 
-        // 3. Wat niet in keptImages zit, moet VERWIJDERD worden
         $imagesToDelete = array_diff($oldImages, $keptImages);
         foreach ($imagesToDelete as $oldPath) {
             Storage::disk('public')->delete($oldPath);
         }
 
-        // 4. Start de definitieve lijst met de foto's die we behouden
         $finalImages = $keptImages;
 
-        // 5. Upload gloednieuwe foto's
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $file) {
                 $path = $file->store('pops', 'public');
@@ -318,7 +310,7 @@ class EventController extends Controller
         }
 
         $validated['images'] = $finalImages;
-        unset($validated['kept_images']); // Verwijder uit validatie array voor we updaten
+        unset($validated['kept_images']);
 
         if (isset($validated['access'])) {
             $validated['is_active'] = $pop->is_active ?? true;
@@ -382,8 +374,8 @@ class EventController extends Controller
             'images' => 'nullable|array',
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
-            'has_first_aider' => 'nullable|boolean', // 👈 Nieuw
-            'has_security' => 'nullable|boolean',    // 👈 Nieuw
+            'has_first_aider' => 'nullable|boolean',
+            'has_security' => 'nullable|boolean',
         ]);
 
         $validated['user_id'] = $request->user()->id;

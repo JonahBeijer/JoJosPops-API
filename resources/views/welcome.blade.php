@@ -26,16 +26,17 @@
     <meta property="twitter:title" content="JOJO'S POPS | Discover Secret Pop-Up Events">
     <meta property="twitter:description" content="The ultimate radar for exclusive drops, secret vintage sales, underground gigs, and limited-time pop-ups.">
     <meta property="twitter:image" content="{{ asset('icon-jojo.png') }}">
-    <!-- SEO: Schema.org Structured Data voor een Mobile App -->
+
+    <!-- SEO: Schema.org Structured Data voor een Mobile App (Voorzien van @@ escapes voor Laravel Blade) -->
     <script type="application/ld+json">
         {
-          "@context": "https://schema.org",
-          "@type": "SoftwareApplication",
+          "@@context": "https://schema.org",
+          "@@type": "SoftwareApplication",
           "name": "JOJO'S POPS",
           "operatingSystem": "iOS, Android",
           "applicationCategory": "LifestyleApplication",
           "offers": {
-            "@type": "Offer",
+            "@@type": "Offer",
             "price": "0",
             "priceCurrency": "EUR"
           },

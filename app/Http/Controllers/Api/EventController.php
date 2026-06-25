@@ -414,13 +414,16 @@ class EventController extends Controller
 
         $urls = [];
         if (!empty($event->images)) {
-            $imagesArray = is_array($event->images)
-                ? $event->images
-                : (json_decode($event->images, true) ?? [$event->images]);
+            // Decodeer indien nodig
+            $imagesArray = is_string($event->images) ? json_decode($event->images, true) : $event->images;
 
-            foreach ($imagesArray as $path) {
-                if ($path) {
-                    $urls[] = asset('storage/' . $path);
+            if (is_array($imagesArray)) {
+                foreach ($imagesArray as $path) {
+                    if ($path) {
+                        // Gebruik Storage::url voor betrouwbare cloud-paden
+                        // Dit zorgt dat hij automatisch de juiste base-URL pakt
+                        $urls[] = Storage::disk('public')->url($path);
+                    }
                 }
             }
         }

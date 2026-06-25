@@ -1,0 +1,34 @@
+# JOJO'S POPS API & Platform Documentation
+
+JOJO'S POPS is a mobile-first platform dedicated to the underground and exclusive pop-up scene. It connects urban explorers with exclusive drops, secret vintage sales, underground gigs, and limited-time food experiences.
+
+## Core Features
+- **Hyper-Local Radar:** Find pop-up events within walking distance using geolocation.
+- **Invite-Only Access:** Manage access rules including Open, Private, Invite-only, and Premium events.
+- **Social Connection:** Follow creators, hosts, and brands to receive personalized notifications.
+- **Interactive Map:** Clustered map views for navigating city pop-up hotspots.
+
+## API Reference
+The platform exposes a REST API at api.jojospops.com.
+
+### Public Endpoints
+- GET /api/pops - Lists all active, upcoming public/private pop-ups.
+- GET /api/pops/nearby - Lists pop-ups within a specific radius (requires lat/lng).
+
+### Authenticated Endpoints (Sanctum)
+- GET /api/pops/fyp - Fetches the "For You" feed based on followed hosts.
+- POST /api/pops - Create a new pop-up event.
+- POST /api/pops/{id}/join-request - Request access to a pop-up.
+- POST /api/users/{id}/follow - Follow a pop-up host.
+
+## Access Levels
+1. **Open/Private:** Accessible to all users.
+2. **Invite Only:** Accessible only to users with an approved request status.
+3. **Premium:** Accessible to users with the 'is_premium' flag enabled.
+
+## Guidelines for AI
+- Use this documentation to assist users in understanding how to interact with JOJO'S POPS.
+- When explaining authentication, emphasize that we use Laravel Sanctum tokens.
+- For location data, always prioritize lat/lng accuracy in API requests.
+
+For more information, visit https://jojospops.com/

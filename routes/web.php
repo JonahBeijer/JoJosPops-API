@@ -108,7 +108,11 @@ Route::post('/delete-account', function (Request $request) {
     </body>
     </html>';
 });
-
+Route::get('/sitemap.xml', function () {
+    return response()
+        ->view('sitemap')
+        ->header('Content-Type', 'text/xml');
+});
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

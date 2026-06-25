@@ -26,7 +26,23 @@
     <meta property="twitter:title" content="JOJO'S POPS | Discover Secret Pop-Up Events">
     <meta property="twitter:description" content="The ultimate radar for exclusive drops, secret vintage sales, underground gigs, and limited-time pop-ups.">
     <meta property="twitter:image" content="{{ asset('icon-jojo.png') }}">
-
+    <!-- SEO: Schema.org Structured Data voor een Mobile App -->
+    <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          "name": "JOJO'S POPS",
+          "operatingSystem": "iOS, Android",
+          "applicationCategory": "LifestyleApplication",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "EUR"
+          },
+          "description": "The ultimate radar for exclusive drops, secret vintage sales, underground gigs, and limited-time food spots.",
+          "image": "https://jojospops.com/icon-jojo.png"
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{{ asset('icon-noti.png') }}?v=2">

@@ -3,10 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JOJO'S POPS - Discover the Exclusive Pop-Up Scene</title>
+
+    <!-- SEO: Primary Meta Tags -->
+    <title>JOJO'S POPS | Discover Secret Pop-Up Events & Exclusive Drops</title>
+    <meta name="title" content="JOJO'S POPS | Discover Secret Pop-Up Events & Exclusive Drops">
+    <meta name="description" content="The ultimate radar for exclusive drops, secret vintage sales, underground gigs, and limited-time pop-ups. Connect with top creators and unlock your city.">
+    <meta name="keywords" content="pop-up events, secret events, exclusive drops, vintage sales, underground gigs, event radar app, JOJO'S POPS">
+
+    <!-- SEO: Canonical URL -->
+    <link rel="canonical" href="https://jojospops.com/" />
+
+    <!-- SEO: Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://jojospops.com/">
+    <meta property="og:title" content="JOJO'S POPS | Discover Secret Pop-Up Events">
+    <meta property="og:description" content="The ultimate radar for exclusive drops, secret vintage sales, underground gigs, and limited-time pop-ups.">
+    <meta property="og:image" content="{{ asset('icon-jojo.png') }}">
+
+    <!-- SEO: Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://jojospops.com/">
+    <meta property="twitter:title" content="JOJO'S POPS | Discover Secret Pop-Up Events">
+    <meta property="twitter:description" content="The ultimate radar for exclusive drops, secret vintage sales, underground gigs, and limited-time pop-ups.">
+    <meta property="twitter:image" content="{{ asset('icon-jojo.png') }}">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" type="image/png" href="{{ asset('icon-noti.png') }}?v=2">    <script>
+    <link rel="icon" type="image/png" href="{{ asset('icon-noti.png') }}?v=2">
+    <script>
         tailwind.config = {
             theme: {
                 extend: {
@@ -46,14 +70,12 @@
         <div class="flex items-center gap-2">
             <img
                 src="{{ asset('icon-jojo.png') }}"
-                alt="JOJO'S POPS"
+                alt="JOJO'S POPS App Logo"
                 class="w-8 h-8 object-contain rounded-full"
             />
-        </div>
-
             <span class="text-lg font-black tracking-wider text-brandDark">
-        JOJO'S <span class="text-brand">POPS</span>
-    </span>
+                JOJO'S <span class="text-brand">POPS</span>
+            </span>
         </div>
     </div>
 </nav>
@@ -99,9 +121,9 @@
 
             <div class="flex items-center justify-center lg:justify-start gap-4 pt-4">
                 <div class="flex -space-x-3">
-                    <img class="w-10 h-10 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="User">
-                    <img class="w-10 h-10 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=100&q=80" alt="User">
-                    <img class="w-10 h-10 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" alt="User">
+                    <img class="w-10 h-10 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Urban explorer using JOJO'S POPS">
+                    <img class="w-10 h-10 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=100&q=80" alt="App user enjoying pop-up events">
+                    <img class="w-10 h-10 rounded-full border-2 border-white object-cover" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" alt="Creator hosting a pop-up">
                 </div>
                 <p class="text-sm font-semibold text-gray-600">Joined by <span class="text-brandDark font-black">10,000+</span> urban explorers</p>
             </div>
@@ -122,9 +144,10 @@
                         <div class="flex items-center gap-2">
                             <img
                                 src="{{ asset('icon-jojo.png') }}"
-                                alt="JOJO'S POPS Logo"
+                                alt="JOJO'S POPS App Icon"
                                 class="w-7 h-7 rounded-full object-cover"
-                            />                        <span class="text-[13px] font-black tracking-wide text-brandDark">JOJO'S <span class="text-brand">POPS</span></span>
+                            />
+                            <span class="text-[13px] font-black tracking-wide text-brandDark">JOJO'S <span class="text-brand">POPS</span></span>
                         </div>
                         <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                             <i class="fa-regular fa-bell text-sm text-brandDark"></i>
@@ -158,7 +181,7 @@
                             <!-- Nearby Card 1 -->
                             <div class="w-[120px] shrink-0">
                                 <div class="w-full aspect-[4/5] rounded-2xl bg-gray-200 mb-2 relative overflow-hidden">
-                                    <img src="https://images.unsplash.com/photo-1555529771-835f59fc5efe?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" alt="Event">
+                                    <img src="https://images.unsplash.com/photo-1555529771-835f59fc5efe?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover" alt="Secret Vintage Archive Sale Pop-up">
                                     <div class="absolute top-2 left-2 bg-brand/90 px-1.5 py-0.5 rounded text-[7px] font-bold text-white tracking-wider">INVITE</div>
                                     <div class="absolute top-2 right-2 bg-accentRed px-1.5 py-0.5 rounded text-[7px] font-bold text-white flex items-center gap-1">
                                         <span class="w-1 h-1 bg-white rounded-full"></span>LIVE
@@ -174,7 +197,8 @@
                             <!-- Nearby Card 2 -->
                             <div class="w-[120px] shrink-0">
                                 <div class="w-full aspect-[4/5] rounded-2xl border-2 border-premiumGold bg-gray-200 mb-2 relative overflow-hidden">
-                                    <img src="https://images.unsplash.com/photo-1641667838410-b257ca266e38?auto=format&fit=crop&w=600&q=80" class="w-full h-full object-cover" alt="Dark forest">                                    <div class="absolute top-2 left-2 bg-premiumLight border border-premiumGold px-1.5 py-0.5 rounded text-[7px] font-bold text-premiumText tracking-wider">PREM</div>
+                                    <img src="https://images.unsplash.com/photo-1641667838410-b257ca266e38?auto=format&fit=crop&w=600&q=80" class="w-full h-full object-cover" alt="Exclusive Rave Woods II Event">
+                                    <div class="absolute top-2 left-2 bg-premiumLight border border-premiumGold px-1.5 py-0.5 rounded text-[7px] font-bold text-premiumText tracking-wider">PREM</div>
                                     <div class="absolute bottom-2 left-2 bg-black/70 px-1.5 py-0.5 rounded-md flex items-center gap-1 text-[8px] font-bold text-white">
                                         <i class="fa-solid fa-location-dot text-[7px]"></i> 1.2 km
                                     </div>
@@ -207,7 +231,7 @@
 
                         <div class="w-full mb-6">
                             <div class="w-full aspect-[4/5] rounded-[20px] bg-gray-100 relative overflow-hidden shadow-sm">
-                                <img src="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80" class="w-full h-full object-cover" alt="Main Event">
+                                <img src="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80" class="w-full h-full object-cover" alt="Underground Techno Warehouse Pop-up">
 
                                 <div class="absolute top-3 left-3 bg-black/80 px-2 py-1 rounded-md text-[8px] font-extrabold text-white tracking-widest">EVENT</div>
                                 <div class="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg">
@@ -321,7 +345,7 @@
             <span class="text-sm font-black tracking-wider text-brandDark">
                 JOJO'S <span class="text-brand">POPS</span>
             </span>
-            <span class="text-sm text-gray-400 font-medium ml-2">&copy; 2026 All rights reserved.</span>
+            <span class="text-sm text-gray-400 font-medium ml-2">&copy; {{ date('Y') }} All rights reserved.</span>
         </div>
 
         <div class="flex flex-wrap gap-x-8 gap-y-4 justify-center text-sm font-semibold text-gray-500">

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ChatNotificationController;
 use App\Http\Controllers\Api\EventRequestController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\ReportController;
@@ -57,7 +58,7 @@ Route::get('/place-details', function (Request $request) {
 // ==========================================
 
 Route::middleware('auth:sanctum')->group(function () {
-
+    Route::post('/chat/notify', [ChatNotificationController::class, 'notify']);
     Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
 
     Route::get('/user', function (Request $request) {

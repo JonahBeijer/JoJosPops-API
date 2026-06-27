@@ -101,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
     Route::post('/users/{id}/follow', [FollowController::class, 'follow']);
     Route::post('/users/{id}/unfollow', [FollowController::class, 'unfollow']);
+    Route::post('/friends/remove', [FriendshipController::class, 'removeFriend']);
 });
 
 // Zorg dat deze onderaan staat, anders vangt hij 'nearby' of 'fyp' af als ID

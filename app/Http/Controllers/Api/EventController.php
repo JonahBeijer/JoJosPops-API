@@ -285,6 +285,7 @@ class EventController extends Controller
             'access' => 'nullable|string',
             'reveal_time' => 'nullable|date',
             'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // 🔥 FIX: Validatie toegevoegd voor array-items
             'kept_images' => 'nullable|array',
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
@@ -372,6 +373,7 @@ class EventController extends Controller
             'access' => 'nullable|string',
             'reveal_time' => 'nullable|date',
             'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // 🔥 FIX: Validatie toegevoegd voor array-items
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
             'has_first_aider' => 'nullable|boolean',
@@ -388,6 +390,8 @@ class EventController extends Controller
                 $storedPaths[] = $path;
             }
             $validated['images'] = $storedPaths;
+        } else {
+            $validated['images'] = []; // Voorkomt null waarden als er toch geen array wordt geaccepteerd
         }
 
         if (empty($validated['reveal_time'])) {

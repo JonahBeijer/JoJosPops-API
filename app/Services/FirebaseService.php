@@ -13,10 +13,10 @@ class FirebaseService
     {
         $client = new Client();
 
-        $client->setAuthConfig(
-            storage_path('app/firebase/firebase-service-account.json')
-        );
+        // DECODEER DE BASE64 STRING UIT JE .ENV
+        $credentials = json_decode(base64_decode(env('FIREBASE_CREDENTIALS_BASE64')), true);
 
+        $client->setAuthConfig($credentials);
         $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
 
         $token = $client->fetchAccessTokenWithAssertion();

@@ -45,19 +45,26 @@ class ChatNotificationController extends Controller
         // 4. Stuur de data-only payload via Firebase Cloud Messaging
         foreach ($usersToNotify as $user) {
             try {
+                // 🔥 FIX: Knip onzichtbare spaties of enters weg van het token!
+                $cleanToken = trim($user->device_token);
+
+                // Controleer voor de zekerheid of het token na het trimmen niet leeg is
+                if (empty($cleanToken)) {
+                    continue;
+                }
+
                 $this->firebase->send(
-                    $user->device_token,
+                    $cleanToken, // Gebruik hier het schone token
                     [
                         'title'       => (string) $chatName,
                         'body'        => (string) $message,
                         'type'        => 'chat',
                         'chat_id'     => (string) $chatId,
                         'sender_name' => (string) $sender->name,
-                        'avatar_url'  => (string) $avatarUrl, // Hier pakt Notifee de foto vandaan!
+                        'avatar_url'  => (string) $avatarUrl,
                     ]
                 );
             } catch (\Exception $e) {
-                // Log de fout, maar crash niet. Zo krijgen de andere mensen in een groepsapp wel hun notificatie.
                 Log::error("Fout bij verzenden push notificatie naar User ID {$user->id}: " . $e->getMessage());
             }
         }

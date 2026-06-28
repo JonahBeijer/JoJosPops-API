@@ -49,19 +49,18 @@ class FirebaseService
 
                 // Stuur alleen 'data'. Dit dwingt de app om onMessage te gebruiken.
                 'data' => array_map('strval', $data),
-
                 'apns' => [
                     'headers' => [
                         'apns-priority' => '10',
-                        'apns-mutable-content' => '1',
+                        // 'apns-push-type' => 'background', // Optioneel, afhankelijk van je specifieke iOS setup
                     ],
                     'payload' => [
                         'aps' => [
                             'sound' => 'default',
-                            'mutable-content' => 1,
-
+                            'content-available' => 1, // 🔥 BELANGRIJK: Wekt de iOS app op in de achtergrond voor data-only
                         ],
                     ],
+
                 ],
             ],
         ];

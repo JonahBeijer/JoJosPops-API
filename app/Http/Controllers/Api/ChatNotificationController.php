@@ -45,16 +45,17 @@ class ChatNotificationController extends Controller
         // 4. Stuur de data-only payload via Firebase Cloud Messaging
         foreach ($usersToNotify as $user) {
             try {
-                // 🔥 FIX: Knip onzichtbare spaties of enters weg van het token!
                 $cleanToken = trim($user->device_token);
 
-                // Controleer voor de zekerheid of het token na het trimmen niet leeg is
                 if (empty($cleanToken)) {
                     continue;
                 }
 
+                // 🔥 DEBUG LOG: Dit vertelt ons exact wat er naar Firebase gaat
+                \Log::info("DEBUG - Verzenden FCM naar User ID {$user->id} met token: '{$cleanToken}'");
+
                 $this->firebase->send(
-                    $cleanToken, // Gebruik hier het schone token
+                    $cleanToken,
                     [
                         'title'       => (string) $chatName,
                         'body'        => (string) $message,
@@ -65,7 +66,8 @@ class ChatNotificationController extends Controller
                     ]
                 );
             } catch (\Exception $e) {
-                Log::error("Fout bij verzenden push notificatie naar User ID {$user->id}: " . $e->getMessage());
+                // Log de fout inclusief de respons van Firebase
+                \Log::error("Fout bij verzenden push notificatie naar User ID {$user->id}: " . $e->getMessage());
             }
         }
 

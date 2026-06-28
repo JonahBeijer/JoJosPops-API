@@ -7,9 +7,9 @@ return [
     | Default Filesystem Disk
     |--------------------------------------------------------------------------
     |
-    | Hier staat nu 's3', omdat je in je .env "FILESYSTEM_DISK=s3" hebt gezet.
+    | Hier staat nu 'sftp', afhankelijk van je .env "FILESYSTEM_DISK=sftp".
     */
-    'default' => env('FILESYSTEM_DISK', 's3'),
+    'default' => env('FILESYSTEM_DISK', 'sftp'),
 
     'disks' => [
 
@@ -28,17 +28,16 @@ return [
             'throw' => false,
         ],
 
-        's3' => [
-            'driver' => 's3',
-            'key' => env('AWS_ACCESS_KEY_ID'),
-            'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION', 'nl-ams'),
-            'bucket' => env('AWS_BUCKET'),
-            'url' => env('AWS_URL'),
-            'endpoint' => env('AWS_ENDPOINT'),
-            // 🔥 Belangrijk: We forceren hier 'true' omdat STACK S3 dit vereist
-            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', true),
-            'throw' => false,
+        // 🔥 SFTP Configuratie voor STACK
+        'sftp' => [
+            'driver' => 'sftp',
+            'host' => env('SFTP_HOST'),
+            'username' => env('SFTP_USERNAME'),
+            'password' => env('SFTP_PASSWORD'),
+            'port' => env('SFTP_PORT', 22),
+            'root' => '/jojos', // Zorg dat deze map bestaat in je STACK
+            'visibility' => 'public',
+            'throw' => true, // Gooit een error als wachtwoord/pad fout is, handig voor debuggen
         ],
 
     ],

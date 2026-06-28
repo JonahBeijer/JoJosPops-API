@@ -13,23 +13,13 @@ use Stripe\PaymentIntent;
 
 class EventController extends Controller
 {
-    /**
-     * Veilige helper om de query te filteren op:
-     * 1. Datum (in de toekomst, of betaald in het verleden)
-     * 2. Strakke Access Rules (Open, Private, Invite-only, Premium)
-     */
     private function applyEventVisibility($query, $user = null, $upcomingOnly = false)
     {
         return $query->where('is_active', true)
-
-            // --- DEEL 1: DATUM CHECK ---
             ->where(function ($q) use ($user, $upcomingOnly) {
-                // Regel A: Event is in de toekomst (of vandaag) of heeft nog geen datum
                 $q->whereDate('date', '>=', now()->toDateString())
                     ->orWhereNull('date');
 
-                // Regel B: Event is al geweest, maar user heeft betaald
-                // (Wordt alleen gebruikt op profiel/tickets pagina's als $upcomingOnly false is)
                 if ($user && !$upcomingOnly) {
                     $q->orWhere(function ($subQ) use ($user) {
                         $subQ->whereDate('date', '<', now()->toDateString())
@@ -40,24 +30,17 @@ class EventController extends Controller
                     });
                 }
             })
-
-            // --- DEEL 2: ACCESS CHECK (Beveiligt nu FYP, Index én Nearby!) ---
             ->where(function ($q) use ($user) {
-                // 1. Iedereen (ook niet-ingelogd) mag Open en Private events ALTIJD zien
                 $q->whereIn('access', ['open', 'private', 'Open', 'Private'])
                     ->orWhereNull('access');
 
                 if ($user) {
-                    // 2. Host mag altijd zijn eigen event zien
                     $q->orWhere('user_id', $user->id);
-
-                    // 3. 🔥 DE VIP PASS: Als je ge-invite bent, mag je invite-only events zien
                     $q->orWhereHas('requests', function ($reqQuery) use ($user) {
                         $reqQuery->where('user_id', $user->id)
                             ->whereIn('status', ['invited', 'pending_invite', 'accepted', 'paid', 'requested']);
                     });
 
-                    // 4. Premium check
                     if (isset($user->is_premium) && $user->is_premium) {
                         $q->orWhereIn('access', ['premium', 'Premium']);
                     }
@@ -68,9 +51,7 @@ class EventController extends Controller
     public function index(Request $request)
     {
         $user = $request->user() ?? auth('sanctum')->user();
-
         $query = Pop::query();
-        // Index feed: verberg oude events (true)
         $query = $this->applyEventVisibility($query, $user, true);
 
         $events = $query->with(['user' => function($query) {
@@ -90,11 +71,9 @@ class EventController extends Controller
     {
         $event = Pop::with(['user' => function($query) {
             $query->select('id', 'name', 'username', 'profile_image');
-        }])
-            ->findOrFail($id);
+        }])->findOrFail($id);
 
         $user = $request->user() ?? auth('sanctum')->user();
-
         $rsvpStatus = 'none';
         $hasPaid = false;
 
@@ -122,19 +101,15 @@ class EventController extends Controller
         }
 
         if (!$event->is_active) {
-            return response()->json([
-                'message' => 'Dit event is niet meer actief.'
-            ], 403);
+            return response()->json(['message' => 'Dit event is niet meer actief.'], 403);
         }
 
         $revealTime = Carbon::parse($event->reveal_time);
-        $isRevealed = now()->gt($revealTime);
-
         $event->user_rsvp_status = $rsvpStatus;
 
         return response()->json([
             'event' => $this->maskSensitiveData($event),
-            'is_revealed' => $isRevealed,
+            'is_revealed' => now()->gt($revealTime),
             'rsvp_status' => $rsvpStatus,
             'has_paid' => $hasPaid
         ]);
@@ -143,10 +118,7 @@ class EventController extends Controller
     public function fypFeed(Request $request)
     {
         $user = $request->user() ?? auth('sanctum')->user();
-
-        if (!$user) {
-            return response()->json([]);
-        }
+        if (!$user) return response()->json([]);
 
         $followingIds = $user->following()->allRelatedIds()->toArray();
         $lat = $request->lat;
@@ -154,14 +126,11 @@ class EventController extends Controller
 
         $query = Pop::query()
             ->where(function ($q) use ($followingIds, $user) {
-                // A. Je volgt de host
                 if (!empty($followingIds)) {
                     $q->whereIn('user_id', $followingIds);
                 } else {
                     $q->whereRaw('0 = 1');
                 }
-
-                // B. OF je hebt een connectie met dit event (bijv. invite gekregen van onbekende)
                 $q->orWhereHas('requests', function ($reqQuery) use ($user) {
                     $reqQuery->where('user_id', $user->id);
                 });
@@ -170,10 +139,8 @@ class EventController extends Controller
                 $q->select('id', 'name', 'username', 'profile_image');
             }]);
 
-        // Hier filteren we automatisch de verboden invites en premium events weg
         $query = $this->applyEventVisibility($query, $user, true);
 
-        // Afstand berekening
         if ($lat && $lng && is_numeric($lat) && is_numeric($lng)) {
             $query->select('*')
                 ->selectRaw("(6371 * acos( cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)) )) AS distance", [$lat, $lng, $lat])
@@ -196,23 +163,16 @@ class EventController extends Controller
             'lng' => 'required|numeric',
         ]);
 
-        $lat = $request->lat;
-        $lng = $request->lng;
-        $radius = $request->radius ?? 10;
-
         $user = $request->user() ?? auth('sanctum')->user();
-
         $query = Pop::query();
-
-        // 👈 Gebruik TRUE zodat oude events absoluut verborgen blijven in Trending Nearby!
         $query = $this->applyEventVisibility($query, $user, true);
 
         $pops = $query->select('*')
             ->with(['user' => function($query) {
                 $query->select('id', 'name', 'username', 'profile_image');
             }])
-            ->selectRaw("(6371 * acos( cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)) )) AS distance", [$lat, $lng, $lat])
-            ->having("distance", "<", $radius)
+            ->selectRaw("(6371 * acos( cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)) )) AS distance", [$request->lat, $request->lng, $request->lat])
+            ->having("distance", "<", $request->radius ?? 10)
             ->orderBy("distance")
             ->get()
             ->map(function($event) {
@@ -231,33 +191,20 @@ class EventController extends Controller
             ->findOrFail($id);
 
         if (!$pop->is_ticketed || !$pop->ticket_price) {
-            return response()->json([
-                'message' => 'Dit event is gratis of heeft geen geldige prijs.'
-            ], 400);
+            return response()->json(['message' => 'Dit event is gratis of heeft geen geldige prijs.'], 400);
         }
 
         Stripe::setApiKey(env('STRIPE_SECRET'));
 
-        $ticketPriceInCents = (int) round($pop->ticket_price * 100);
-
         try {
             $paymentIntent = PaymentIntent::create([
-                'amount' => $ticketPriceInCents,
+                'amount' => (int) round($pop->ticket_price * 100),
                 'currency' => 'eur',
-                'automatic_payment_methods' => [
-                    'enabled' => true,
-                ],
+                'automatic_payment_methods' => ['enabled' => true],
             ]);
-
-            return response()->json([
-                'paymentIntent' => $paymentIntent->client_secret
-            ], 200);
-
+            return response()->json(['paymentIntent' => $paymentIntent->client_secret], 200);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Fout bij het opzetten van de betaling.',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['message' => 'Fout bij het opzetten van de betaling.', 'error' => $e->getMessage()], 500);
         }
     }
 
@@ -266,9 +213,7 @@ class EventController extends Controller
         $pop = Pop::findOrFail($id);
 
         if ($pop->user_id !== $request->user()->id) {
-            return response()->json([
-                'message' => 'Unauthorized. You do not own this pop-up.'
-            ], 403);
+            return response()->json(['message' => 'Unauthorized. You do not own this pop-up.'], 403);
         }
 
         $validated = $request->validate([
@@ -285,7 +230,7 @@ class EventController extends Controller
             'access' => 'nullable|string',
             'reveal_time' => 'nullable|date',
             'images' => 'nullable|array',
-            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // 🔥 FIX: Validatie toegevoegd voor array-items
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'kept_images' => 'nullable|array',
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
@@ -296,17 +241,15 @@ class EventController extends Controller
         $oldImages = is_array($pop->images) ? $pop->images : (json_decode($pop->images, true) ?? []);
         $keptImages = $request->input('kept_images', []);
 
-        $imagesToDelete = array_diff($oldImages, $keptImages);
-        foreach ($imagesToDelete as $oldPath) {
-            Storage::disk('s3')->delete($oldPath); // Aangepast naar s3
+        foreach (array_diff($oldImages, $keptImages) as $oldPath) {
+            Storage::disk('sftp')->delete($oldPath); // Aangepast naar SFTP
         }
 
         $finalImages = $keptImages;
 
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $file) {
-                $path = $file->store('pops', 's3'); // Aangepast naar s3
-                $finalImages[] = $path;
+                $finalImages[] = $file->store('pops', 'sftp'); // Aangepast naar SFTP
             }
         }
 
@@ -319,10 +262,7 @@ class EventController extends Controller
 
         $pop->update($validated);
 
-        return response()->json([
-            'message' => 'Pop-up successfully updated! ✏️',
-            'event' => $pop
-        ]);
+        return response()->json(['message' => 'Pop-up successfully updated! ✏️', 'event' => $pop]);
     }
 
     public function destroy(Request $request, $id)
@@ -330,30 +270,20 @@ class EventController extends Controller
         $pop = Pop::findOrFail($id);
 
         if ($pop->user_id !== $request->user()->id) {
-            return response()->json([
-                'message' => 'Unauthorized. You do not own this pop-up.'
-            ], 403);
+            return response()->json(['message' => 'Unauthorized. You do not own this pop-up.'], 403);
         }
 
         try {
             if (!empty($pop->images)) {
                 $imagesArray = is_array($pop->images) ? $pop->images : (json_decode($pop->images, true) ?? []);
                 foreach ($imagesArray as $path) {
-                    Storage::disk('s3')->delete($path); // Aangepast naar s3
+                    Storage::disk('sftp')->delete($path); // Aangepast naar SFTP
                 }
             }
-
             $pop->delete();
-
-            return response()->json([
-                'message' => 'Pop-up successfully deleted! 🗑️'
-            ], 200);
-
+            return response()->json(['message' => 'Pop-up successfully deleted! 🗑️'], 200);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to delete pop-up.',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['message' => 'Failed to delete pop-up.', 'error' => $e->getMessage()], 500);
         }
     }
 
@@ -373,7 +303,7 @@ class EventController extends Controller
             'access' => 'nullable|string',
             'reveal_time' => 'nullable|date',
             'images' => 'nullable|array',
-            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120', // 🔥 FIX: Validatie toegevoegd voor array-items
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
             'is_ticketed' => 'nullable|boolean',
             'ticket_price' => 'nullable|numeric',
             'has_first_aider' => 'nullable|boolean',
@@ -386,12 +316,11 @@ class EventController extends Controller
         if ($request->hasFile('images')) {
             $storedPaths = [];
             foreach ($request->file('images') as $file) {
-                $path = $file->store('pops', 's3'); // Aangepast naar s3
-                $storedPaths[] = $path;
+                $storedPaths[] = $file->store('pops', 'sftp'); // Aangepast naar SFTP
             }
             $validated['images'] = $storedPaths;
         } else {
-            $validated['images'] = []; // Voorkomt null waarden als er toch geen array wordt geaccepteerd
+            $validated['images'] = [];
         }
 
         if (empty($validated['reveal_time'])) {
@@ -400,10 +329,7 @@ class EventController extends Controller
 
         $event = Pop::create($validated);
 
-        return response()->json([
-            'message' => 'Pop-up successfully dropped! 🚀',
-            'event' => $event
-        ], 201);
+        return response()->json(['message' => 'Pop-up successfully dropped! 🚀', 'event' => $event], 201);
     }
 
     private function maskSensitiveData($event)
@@ -418,15 +344,12 @@ class EventController extends Controller
 
         $urls = [];
         if (!empty($event->images)) {
-            // Decodeer indien nodig
             $imagesArray = is_string($event->images) ? json_decode($event->images, true) : $event->images;
-
             if (is_array($imagesArray)) {
                 foreach ($imagesArray as $path) {
                     if ($path) {
-                        // Gebruik Storage::url voor betrouwbare cloud-paden
-                        // Dit zorgt dat hij automatisch de juiste base-URL pakt
-                        $urls[] = Storage::disk('s3')->url($path); // Aangepast naar s3
+                        // 🔥 FIX: Verwijs naar onze eigen proxy-route in plaats van S3
+                        $urls[] = url("/api/pops/image?path=" . urlencode($path));
                     }
                 }
             }
@@ -434,5 +357,20 @@ class EventController extends Controller
         $event->image_urls = $urls;
 
         return $event;
+    }
+
+    // 🔥 NIEUW: Omdat SFTP geen publieke URL's heeft, haalt Laravel ze hier op en stuurt ze naar de app
+    public function serveImage(Request $request)
+    {
+        $path = $request->query('path');
+
+        if (!$path || !Storage::disk('sftp')->exists($path)) {
+            return response()->json(['message' => 'Afbeelding niet gevonden op SFTP.'], 404);
+        }
+
+        $file = Storage::disk('sftp')->get($path);
+        $mimeType = Storage::disk('sftp')->mimeType($path);
+
+        return response($file, 200)->header('Content-Type', $mimeType);
     }
 }

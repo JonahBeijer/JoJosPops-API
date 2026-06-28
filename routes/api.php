@@ -18,7 +18,7 @@ use App\Http\Controllers\Api\FriendshipController;
 
 Route::get('/pops/nearby', [EventController::class, 'nearby']);
 Route::get('/pops', [EventController::class, 'index']);
-
+Route::get('/pops/image', [EventController::class, 'serveImage']);
 // Authenticatie & Registratie
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']); // ✅ Staat goed!

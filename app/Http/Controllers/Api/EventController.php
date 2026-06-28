@@ -298,14 +298,14 @@ class EventController extends Controller
 
         $imagesToDelete = array_diff($oldImages, $keptImages);
         foreach ($imagesToDelete as $oldPath) {
-            Storage::disk('public')->delete($oldPath);
+            Storage::disk('s3')->delete($oldPath); // Aangepast naar s3
         }
 
         $finalImages = $keptImages;
 
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $file) {
-                $path = $file->store('pops', 'public');
+                $path = $file->store('pops', 's3'); // Aangepast naar s3
                 $finalImages[] = $path;
             }
         }
@@ -339,7 +339,7 @@ class EventController extends Controller
             if (!empty($pop->images)) {
                 $imagesArray = is_array($pop->images) ? $pop->images : (json_decode($pop->images, true) ?? []);
                 foreach ($imagesArray as $path) {
-                    Storage::disk('public')->delete($path);
+                    Storage::disk('s3')->delete($path); // Aangepast naar s3
                 }
             }
 
@@ -386,7 +386,7 @@ class EventController extends Controller
         if ($request->hasFile('images')) {
             $storedPaths = [];
             foreach ($request->file('images') as $file) {
-                $path = $file->store('pops', 'public');
+                $path = $file->store('pops', 's3'); // Aangepast naar s3
                 $storedPaths[] = $path;
             }
             $validated['images'] = $storedPaths;
@@ -426,7 +426,7 @@ class EventController extends Controller
                     if ($path) {
                         // Gebruik Storage::url voor betrouwbare cloud-paden
                         // Dit zorgt dat hij automatisch de juiste base-URL pakt
-                        $urls[] = Storage::disk('public')->url($path);
+                        $urls[] = Storage::disk('s3')->url($path); // Aangepast naar s3
                     }
                 }
             }

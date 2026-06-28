@@ -11,25 +11,26 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Hash; // 💡 Toegevoegd voor wachtwoordcontrole!
+use Illuminate\Support\Facades\Hash; // 💡 Added for password verification!
+use Illuminate\Support\Facades\Storage; // 💡 Added for S3 URL generation
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ProfileController extends Controller
 {
     /**
-     * Haal de gegevens op voor de mobiele Expo app.
+     * Fetch the data for the mobile Expo app.
      */
     public function show(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        // 1. Haal de pops op die van de gebruiker ZELF zijn
+        // 1. Fetch the pops owned by the user THEMSELVES
         $myPops = Pop::where('user_id', $user->id)
             ->orderBy('date', 'desc')
             ->get();
 
-        // 2. Haal de pops op waar deze gebruiker naar TOE GAAT
+        // 2. Fetch the pops the user is ATTENDING
         $goingPops = Pop::whereHas('requests', function($query) use ($user) {
             $query->where('user_id', $user->id)
                 ->whereIn('status', ['accepted', 'paid']);
@@ -43,7 +44,7 @@ class ProfileController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'username' => $user->username,
-                'profile_image' => $user->profile_image
+                'profile_image' => $user->profile_image ? Storage::disk('s3')->url($user->profile_image) : null
             ],
             'my_pops' => $myPops,
             'going' => $goingPops
@@ -99,7 +100,7 @@ class ProfileController extends Controller
     }
 
     /**
-     * Status synchroniseren.
+     * Synchronize premium status.
      */
     public function syncPremium(Request $request)
     {
@@ -113,13 +114,15 @@ class ProfileController extends Controller
     }
 
     /**
-     * Update de avatar en synchroniseer DIRECT naar Firebase Firestore rooms.
+     * Update the avatar and sync DIRECTLY to Firebase Firestore rooms.
      */
     public function updateAvatar(Request $request)
     {
-        $request->validate(['image' => 'required|image|mimes:jpeg,png,jpg|max:2048']);
+        // Added webp and increased max size to 5MB to match EventController
+        $request->validate(['image' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120']);
 
-        $path = $request->file('image')->store('profiles', 'public');
+        // 💡 Now uses S3 instead of public storage
+        $path = $request->file('image')->store('profiles', 's3');
 
         $user = $request->user();
         $user->profile_image = $path;
@@ -163,6 +166,7 @@ class ProfileController extends Controller
                                             $firebaseUserId => [
                                                 'mapValue' => [
                                                     'fields' => [
+                                                        // Firebase uses the raw path or you could pass the full S3 url if preferred
                                                         'avatar' => ['stringValue' => $path]
                                                     ]
                                                 ]
@@ -176,13 +180,13 @@ class ProfileController extends Controller
                 }
             }
         } catch (\Exception $e) {
-            \Log::error("Firebase avatar sync mislukt: " . $e->getMessage());
+            \Log::error("Firebase avatar sync failed: " . $e->getMessage());
         }
 
         return response()->json([
-            'message' => 'Profielfoto succesvol bijgewerkt!',
+            'message' => 'Profile picture successfully updated!',
             'profile_image' => $path,
-            'url' => asset('storage/' . $path),
+            'url' => Storage::disk('s3')->url($path), // 💡 Now returns a secure S3 URL to your React Native app
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -193,7 +197,7 @@ class ProfileController extends Controller
     }
 
     // ==========================================
-    // 💡 NIEUW: EMAIL WIJZIGEN (Voor Mobiele App)
+    // 💡 NEW: UPDATE EMAIL (For Mobile App)
     // ==========================================
     public function updateEmail(Request $request)
     {
@@ -205,20 +209,20 @@ class ProfileController extends Controller
         ]);
 
         if (!Hash::check($request->current_password, $user->password)) {
-            return response()->json(['message' => 'Huidig wachtwoord is onjuist.'], 403);
+            return response()->json(['message' => 'Current password is incorrect.'], 403);
         }
 
         $user->email = $request->email;
         $user->save();
 
         return response()->json([
-            'message' => 'E-mailadres succesvol gewijzigd.',
+            'message' => 'Email address successfully updated.',
             'user' => $user
         ], 200);
     }
 
     // ==========================================
-    // 💡 NIEUW: WACHTWOORD WIJZIGEN (Voor Mobiele App)
+    // 💡 NEW: UPDATE PASSWORD (For Mobile App)
     // ==========================================
     public function updatePassword(Request $request)
     {
@@ -230,14 +234,14 @@ class ProfileController extends Controller
         ]);
 
         if (!Hash::check($request->current_password, $user->password)) {
-            return response()->json(['message' => 'Huidig wachtwoord is onjuist.'], 403);
+            return response()->json(['message' => 'Current password is incorrect.'], 403);
         }
 
         $user->password = Hash::make($request->password);
         $user->save();
 
         return response()->json([
-            'message' => 'Wachtwoord succesvol gewijzigd.'
+            'message' => 'Password successfully updated.'
         ], 200);
     }
 }

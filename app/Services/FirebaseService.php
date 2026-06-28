@@ -59,11 +59,7 @@ class FirebaseService
                         'aps' => [
                             'sound' => 'default',
                             'mutable-content' => 1,
-                            // 🔥 VOEG DIT TOE VOOR IOS:
-                            'alert' => [
-                                'title' => $data['title'],
-                                'body'  => $data['body'],
-                            ],
+
                         ],
                     ],
                 ],

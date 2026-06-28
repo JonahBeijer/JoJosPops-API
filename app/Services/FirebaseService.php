@@ -55,10 +55,12 @@ class FirebaseService
                 'apns' => [
                     'headers' => [
                         'apns-priority' => '10',
+                        'apns-mutable-content' => '1', // Nodig voor Rich Notifications op iOS
                     ],
                     'payload' => [
                         'aps' => [
                             'sound' => 'default',
+                            'mutable-content' => 1, // Nodig voor iOS om content te wijzigen/afbeelding te laden
                         ],
                     ],
                 ],
@@ -73,9 +75,8 @@ class FirebaseService
                 $payload
             );
 
-        \Log::info($response->body());
-
         if (!$response->successful()) {
+            \Log::error("Firebase fout: " . $response->body());
             throw new \Exception($response->body());
         }
 

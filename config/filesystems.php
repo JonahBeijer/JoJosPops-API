@@ -34,8 +34,7 @@ return [
             'host' => env('SFTP_HOST'),
             'username' => env('SFTP_USERNAME'),
             'password' => env('SFTP_PASSWORD'),
-            'port' => env('SFTP_PORT', 22),
-            'root' => '/jojos', // Zorg dat deze map bestaat in je STACK
+            'port' => (int) env('SFTP_PORT', 22),            'root' => '/jojos', // Zorg dat deze map bestaat in je STACK
             'visibility' => 'public',
             'throw' => true, // Gooit een error als wachtwoord/pad fout is, handig voor debuggen
         ],

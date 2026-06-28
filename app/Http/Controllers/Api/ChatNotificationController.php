@@ -24,29 +24,29 @@ class ChatNotificationController extends Controller
 
     public function notify(Request $request)
     {
+        $sender = $request->user();
         $message = $request->input('message');
         $chatId = $request->input('chat_id');
-        $chatName = $request->input('chat_name'); // 🔥 Pakt nu de juiste naam (Groepsnaam of Gebruikersnaam)
+        $chatName = $request->input('chat_name');
+        $senderAvatar = $sender->profile_image; // De pad-string
         $receiverIds = $request->input('receivers');
 
-        if (empty($receiverIds)) {
-            return response()->json(['success' => false, 'message' => 'Geen ontvangers opgegeven'], 400);
-        }
-
-        // Haal alle gebruikers op die in deze chat zitten (behalve de afzender)
-        $usersToNotify = User::whereIn('id', $receiverIds)
-            ->whereNotNull('device_token')
-            ->get();
+        $usersToNotify = User::whereIn('id', $receiverIds)->whereNotNull('device_token')->get();
 
         foreach ($usersToNotify as $user) {
-            $this->sendPushNotification(
-                $user->device_token,
-                $chatName,     // Titel = De naam die React Native meestuurt
-                $message,      // Body = Het getypte bericht
-                ['type' => 'chat', 'chat_id' => $chatId] // Data voor je Expo Router
-            );
+            // We sturen geen 'title' of 'body' via de Expo server,
+            // maar pure 'data'. De app doet de rest.
+            Http::post('https://exp.host/--/api/v2/push/send', [
+                'to' => $user->device_token,
+                'data' => [
+                    'type' => 'chat',
+                    'chat_id' => $chatId,
+                    'title' => $chatName,
+                    'body' => $message,
+                    'avatar_url' => $senderAvatar, // Stuur de path string mee
+                ],
+            ]);
         }
-
         return response()->json(['success' => true]);
     }
 }

@@ -45,22 +45,25 @@ class FirebaseService
             'message' => [
                 'token' => trim($deviceToken),
 
-                'notification' => [
-                    'title' => $data['title'],
-                    'body'  => $data['body'],
-                ],
+                // 🔥 VERWIJDER DE 'notification' KEY VOLLEDIG
 
+                // Stuur alleen 'data'. Dit dwingt de app om onMessage te gebruiken.
                 'data' => array_map('strval', $data),
 
                 'apns' => [
                     'headers' => [
                         'apns-priority' => '10',
-                        'apns-mutable-content' => '1', // Nodig voor Rich Notifications op iOS
+                        'apns-mutable-content' => '1',
                     ],
                     'payload' => [
                         'aps' => [
                             'sound' => 'default',
-                            'mutable-content' => 1, // Nodig voor iOS om content te wijzigen/afbeelding te laden
+                            'mutable-content' => 1,
+                            // 🔥 VOEG DIT TOE VOOR IOS:
+                            'alert' => [
+                                'title' => $data['title'],
+                                'body'  => $data['body'],
+                            ],
                         ],
                     ],
                 ],

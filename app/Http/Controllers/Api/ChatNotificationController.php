@@ -24,10 +24,10 @@ class ChatNotificationController extends Controller
 
     public function notify(Request $request)
     {
-        $sender = $request->user();
         $message = $request->input('message');
         $chatId = $request->input('chat_id');
-        $receiverIds = $request->input('receivers'); // Array met ID's, bijv: [2, 5]
+        $chatName = $request->input('chat_name'); // 🔥 Pakt nu de juiste naam (Groepsnaam of Gebruikersnaam)
+        $receiverIds = $request->input('receivers');
 
         if (empty($receiverIds)) {
             return response()->json(['success' => false, 'message' => 'Geen ontvangers opgegeven'], 400);
@@ -41,7 +41,7 @@ class ChatNotificationController extends Controller
         foreach ($usersToNotify as $user) {
             $this->sendPushNotification(
                 $user->device_token,
-                $sender->name, // Titel = Naam van de afzender (zoals WhatsApp)
+                $chatName,     // Titel = De naam die React Native meestuurt
                 $message,      // Body = Het getypte bericht
                 ['type' => 'chat', 'chat_id' => $chatId] // Data voor je Expo Router
             );

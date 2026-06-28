@@ -11,8 +11,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Hash; // 💡 Added for password verification!
-use Illuminate\Support\Facades\Storage; // 💡 Added for S3 URL generation
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -44,7 +44,8 @@ class ProfileController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'username' => $user->username,
-                'profile_image' => $user->profile_image ? Storage::disk('s3')->url($user->profile_image) : null
+                // 🔥 AANGEPAST: Gebruikt nu onze SFTP proxy-route in plaats van S3
+                'profile_image' => $user->profile_image ? url("/api/pops/image?path=" . urlencode($user->profile_image)) : null
             ],
             'my_pops' => $myPops,
             'going' => $goingPops
@@ -118,11 +119,10 @@ class ProfileController extends Controller
      */
     public function updateAvatar(Request $request)
     {
-        // Added webp and increased max size to 5MB to match EventController
         $request->validate(['image' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120']);
 
-        // 💡 Now uses S3 instead of public storage
-        $path = $request->file('image')->store('profiles', 's3');
+        // 🔥 AANGEPAST: Slaat nu op via SFTP
+        $path = $request->file('image')->store('profiles', 'sftp');
 
         $user = $request->user();
         $user->profile_image = $path;
@@ -166,7 +166,6 @@ class ProfileController extends Controller
                                             $firebaseUserId => [
                                                 'mapValue' => [
                                                     'fields' => [
-                                                        // Firebase uses the raw path or you could pass the full S3 url if preferred
                                                         'avatar' => ['stringValue' => $path]
                                                     ]
                                                 ]
@@ -186,7 +185,8 @@ class ProfileController extends Controller
         return response()->json([
             'message' => 'Profile picture successfully updated!',
             'profile_image' => $path,
-            'url' => Storage::disk('s3')->url($path), // 💡 Now returns a secure S3 URL to your React Native app
+            // 🔥 AANGEPAST: Geeft nu de SFTP proxy url terug
+            'url' => url("/api/pops/image?path=" . urlencode($path)),
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -196,9 +196,6 @@ class ProfileController extends Controller
         ], 200);
     }
 
-    // ==========================================
-    // 💡 NEW: UPDATE EMAIL (For Mobile App)
-    // ==========================================
     public function updateEmail(Request $request)
     {
         $user = $request->user();
@@ -221,9 +218,6 @@ class ProfileController extends Controller
         ], 200);
     }
 
-    // ==========================================
-    // 💡 NEW: UPDATE PASSWORD (For Mobile App)
-    // ==========================================
     public function updatePassword(Request $request)
     {
         $user = $request->user();

@@ -45,9 +45,7 @@ class FirebaseService
             'message' => [
                 'token' => trim($deviceToken),
 
-                // 🔥 VERWIJDER DE 'notification' KEY VOLLEDIG
-
-                // Stuur alleen 'data'. Dit dwingt de app om onMessage te gebruiken.
+                // Stuur alleen 'data'. Dit dwingt de app om onMessage te gebruiken via Notifee.
                 'data' => array_map('strval', $data),
                 'apns' => [
                     'headers' => [
@@ -55,17 +53,16 @@ class FirebaseService
                     ],
                     'payload' => [
                         'aps' => [
-                            // 🔥 Geen 'sound' of 'alert' hier! Alleen content-available.
-                            // Dit voorkomt de dubbele notificatie op iOS.
+                            // 🔥 Geen 'sound' of 'alert' hier!
+                            // Dit voorkomt dat iOS zélf een tweede notificatie aanmaakt.
                             'content-available' => 1,
                         ],
                     ],
-
                 ],
             ],
         ];
 
-        \Log::info($payload);
+        \Log::info('Firebase Payload:', $payload);
 
         $response = Http::withToken($this->getAccessToken())
             ->post(

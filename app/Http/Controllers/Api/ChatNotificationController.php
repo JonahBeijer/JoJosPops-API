@@ -22,8 +22,8 @@ class ChatNotificationController extends Controller
             'message'   => 'required|string',
             'chat_id'   => 'required',
             'chat_name' => 'required|string',
-            'is_group'  => 'boolean',        // 🔥 Nieuw
-            'group_avatar' => 'nullable|string' // 🔥 Nieuw
+            'is_group'  => 'boolean',
+            'group_avatar' => 'nullable|string'
         ]);
 
         $sender = $request->user();
@@ -57,11 +57,13 @@ class ChatNotificationController extends Controller
                 if (empty($cleanToken)) continue;
 
                 // 🔥 Hier voegen we de groep-data toe aan de payload
+                // In ChatNotificationController.php (rond regel 54)
                 $payload = [
                     'title'        => (string) $chatName,
                     'body'         => (string) $message,
                     'type'         => 'chat',
                     'chat_id'      => (string) $chatId,
+                    'sender_id'    => (string) $sender->id, // 🟢 VOEG DEZE TOE
                     'sender_name'  => (string) $sender->name,
                     'avatar_url'   => (string) $avatarUrl,
                     'is_group'     => $isGroup ? 'true' : 'false',

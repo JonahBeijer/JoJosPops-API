@@ -16,6 +16,7 @@ class ChatNotificationController extends Controller
 
     public function notify(Request $request)
     {
+        // 1. Valideer de inkomende data
         $request->validate([
             'receivers' => 'required|array',
             'message'   => 'required|string',
@@ -30,11 +31,12 @@ class ChatNotificationController extends Controller
         $chatId = $request->input('chat_id');
         $chatName = $request->input('chat_name');
 
+        // Groeps-specifieke data
         $isGroup = $request->input('is_group', false);
         $groupAvatar = $request->input('group_avatar');
         $receiverIds = $request->input('receivers');
 
-        // 🔥 OPLOSSING: Check of het al een externe URL is, voorkom dubbele urls!
+        // Veilig de avatar URLs opbouwen (voorkomt dubbele 'http://...' nesting)
         $avatarUrl = null;
         if (!empty($sender->profile_image)) {
             $avatarUrl = filter_var($sender->profile_image, FILTER_VALIDATE_URL)

@@ -52,12 +52,12 @@ class FirebaseService
                 'apns' => [
                     'headers' => [
                         'apns-priority' => '10',
-                        // 'apns-push-type' => 'background', // Optioneel, afhankelijk van je specifieke iOS setup
                     ],
                     'payload' => [
                         'aps' => [
-                            'sound' => 'default',
-                            'content-available' => 1, // 🔥 BELANGRIJK: Wekt de iOS app op in de achtergrond voor data-only
+                            // 🔥 Geen 'sound' of 'alert' hier! Alleen content-available.
+                            // Dit voorkomt de dubbele notificatie op iOS.
+                            'content-available' => 1,
                         ],
                     ],
 

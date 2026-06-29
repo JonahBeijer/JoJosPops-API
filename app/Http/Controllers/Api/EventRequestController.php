@@ -11,9 +11,6 @@ use Illuminate\Support\Facades\Http;
 
 class EventRequestController extends Controller
 {
-    /**
-     * Helper to send push notifications via Expo
-     */
     private function sendPushNotification($token, $title, $body, $data = [])
     {
         if (!$token) return;
@@ -27,9 +24,6 @@ class EventRequestController extends Controller
         ]);
     }
 
-    /**
-     * 1. Zelf een request sturen óf een openstaande invite accepteren
-     */
     public function storeRequest(Request $request, $popId)
     {
         $pop = Pop::with('user')->findOrFail($popId);
@@ -37,7 +31,7 @@ class EventRequestController extends Controller
         $userId = $user->id;
 
         if ($pop->user_id === $userId) {
-            return response()->json(['message' => 'You are the host'], 400);
+            return response()->json(['message' => 'You are the host.'], 400);
         }
 
         $existingRequest = PopRequest::where('user_id', $userId)
@@ -49,24 +43,25 @@ class EventRequestController extends Controller
                 $existingRequest->update(['status' => 'accepted']);
                 $pop->increment('current_guests');
 
-                // Notify host that someone accepted their invite
                 $this->sendPushNotification(
                     $pop->user->device_token ?? null,
-                    'Invite Accepted! 🎉',
-                    "{$user->name} accepted your invite to '{$pop->title}'",
+                    'Invite Accepted',
+                    "{$user->name} accepted your invite to '{$pop->title}'.",
                     ['type' => 'invite_accepted', 'pop_id' => $pop->id]
                 );
 
                 return response()->json([
-                    'message' => 'Uitnodiging geaccepteerd! 🎉',
+                    'message' => 'Invitation accepted.',
                     'status' => 'accepted'
                 ]);
             }
-            return response()->json(['message' => 'Already requested or accepted'], 400);
+
+            return response()->json([
+                'message' => 'You have already requested to join or have already been accepted.'
+            ], 400);
         }
 
         $isOpenAndFree = ((empty($pop->access) || strtolower($pop->access) === 'open') && !$pop->is_ticketed);
-
         $status = $isOpenAndFree ? 'accepted' : 'pending';
 
         PopRequest::create([
@@ -78,37 +73,32 @@ class EventRequestController extends Controller
         if ($isOpenAndFree) {
             $pop->increment('current_guests');
 
-            // Notify host someone joined their open event
             $this->sendPushNotification(
                 $pop->user->device_token ?? null,
-                'New Guest! 🥳',
-                "{$user->name} joined '{$pop->title}'",
+                'New Guest',
+                "{$user->name} joined '{$pop->title}'.",
                 ['type' => 'guest_joined', 'pop_id' => $pop->id]
             );
 
             return response()->json([
-                'message' => 'Direct toegelaten tot dit open evenement! 🎉',
+                'message' => 'You have joined this open event.',
                 'status' => 'accepted'
             ]);
         }
 
-        // Notify host someone requested to join their private/premium event
         $this->sendPushNotification(
             $pop->user->device_token ?? null,
-            'New Request to Join 🎫',
-            "{$user->name} requested to join '{$pop->title}'",
+            'New Join Request',
+            "{$user->name} requested to join '{$pop->title}'.",
             ['type' => 'join_request', 'pop_id' => $pop->id]
         );
 
         return response()->json([
-            'message' => 'Request sent!',
+            'message' => 'Request sent.',
             'status' => 'pending'
         ]);
     }
 
-    /**
-     * Bevestigen van de betaling (Ticket flow)
-     */
     public function confirmPayment(Request $request, $popId)
     {
         $userId = $request->user()->id;
@@ -133,24 +123,20 @@ class EventRequestController extends Controller
         if (!$alreadyCounted) {
             $pop->increment('current_guests');
 
-            // Notify host of new ticket sale
             $this->sendPushNotification(
                 $pop->user->device_token ?? null,
-                'Ticket Sold! 🎟️',
-                "{$request->user()->name} bought a ticket for '{$pop->title}'",
+                'Ticket Sold',
+                "{$request->user()->name} bought a ticket for '{$pop->title}'.",
                 ['type' => 'ticket_sold', 'pop_id' => $pop->id]
             );
         }
 
         return response()->json([
-            'message' => 'Betaling succesvol verwerkt en toegevoegd aan gastenlijst!',
+            'message' => 'Payment successfully processed and added to the guest list.',
             'status' => $popRequest->status
         ]);
     }
 
-    /**
-     * 2. Ophalen van alle binnenkomende aanvragen en directe aanmeldingen (Algemeen overzicht)
-     */
     public function getPendingRequests(Request $request)
     {
         $userId = $request->user()->id;
@@ -184,30 +170,35 @@ class EventRequestController extends Controller
         $invitedUserId = $request->input('user_id');
         $pop = Pop::findOrFail($id);
 
-        $existing = \App\Models\PopRequest::where('pop_id', $id)
+        $existing = PopRequest::where('pop_id', $id)
             ->where('user_id', $invitedUserId)
             ->first();
 
         if ($existing) {
-            return response()->json(['message' => 'User is already invited or requested.'], 400);
+            return response()->json([
+                'message' => 'User is already invited or has already requested to join.'
+            ], 400);
         }
 
-        \App\Models\PopRequest::create([
+        PopRequest::create([
             'pop_id' => $id,
             'user_id' => $invitedUserId,
             'status' => 'pending_invite'
         ]);
 
-        // 🔥 FIRE PUSH NOTIFICATION TO THE GUEST
         $invitedUser = User::find($invitedUserId);
+
         $this->sendPushNotification(
             $invitedUser->device_token ?? null,
-            'You have been invited! ✉️',
+            'You Have Been Invited',
             "{$host->name} invited you to '{$pop->title}'.",
             ['type' => 'invite', 'pop_id' => $pop->id]
         );
 
-        return response()->json(['success' => true, 'message' => 'Uitnodiging verstuurd!']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Invitation sent.'
+        ]);
     }
 
     public function acceptRequest($requestId)
@@ -215,39 +206,37 @@ class EventRequestController extends Controller
         $request = PopRequest::with(['user', 'pop'])->findOrFail($requestId);
 
         if ($request->pop->user_id !== auth()->id() && $request->user_id !== auth()->id()) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
         if ($request->status !== 'accepted' && $request->status !== 'paid') {
             $request->update(['status' => 'accepted']);
             $request->pop->increment('current_guests');
 
-            // If the host is accepting a pending request, notify the user!
             if ($request->pop->user_id === auth()->id()) {
                 $this->sendPushNotification(
                     $request->user->device_token ?? null,
-                    'Request Approved! ✅',
-                    "You have been approved to join '{$request->pop->title}'!",
+                    'Request Approved',
+                    "You have been approved to join '{$request->pop->title}'.",
                     ['type' => 'request_approved', 'pop_id' => $request->pop->id]
                 );
             }
         }
 
         return response()->json([
-            'message' => 'Geaccepteerd',
+            'message' => 'Accepted.',
             'status' => 'accepted'
         ]);
     }
 
-    /**
-     * 3. Ophalen van alle verzoeken voor één SPECIFIEKE pop-up
-     */
     public function getRequestsForPop(Request $request, $id)
     {
         $pop = Pop::findOrFail($id);
 
         if ($pop->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized. You are not the host.'], 403);
+            return response()->json([
+                'message' => 'Unauthorized. You are not the host.'
+            ], 403);
         }
 
         $requests = PopRequest::where('pop_id', $id)
@@ -255,6 +244,7 @@ class EventRequestController extends Controller
             ->get()
             ->map(function ($req) {
                 $frontendStatus = 'pending';
+
                 if (in_array($req->status, ['accepted', 'paid'])) {
                     $frontendStatus = 'accepted';
                 } elseif ($req->status === 'pending_invite') {
@@ -277,16 +267,13 @@ class EventRequestController extends Controller
         return response()->json(['requests' => $requests], 200);
     }
 
-    /**
-     * 5. Weigeren van een verzoek óf een bestaande gast/ticket-koper VERWIJDEREN
-     */
     public function declineRequest(Request $request, $requestId)
     {
         $popRequest = PopRequest::findOrFail($requestId);
         $pop = Pop::findOrFail($popRequest->pop_id);
 
         if ($pop->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
         if (in_array($popRequest->status, ['accepted', 'paid'])) {
@@ -298,14 +285,11 @@ class EventRequestController extends Controller
         $popRequest->delete();
 
         return response()->json([
-            'message' => 'Gebruiker succesvol van de gastenlijst verwijderd en teller bijgewerkt.',
+            'message' => 'User successfully removed from the guest list and guest count updated.',
             'current_guests' => $pop->fresh()->current_guests
         ], 200);
     }
 
-    /**
-     * Ophalen van uitnodigingen die JIJ hebt ontvangen van een host
-     */
     public function getUserInvites(Request $request)
     {
         $userId = $request->user()->id;

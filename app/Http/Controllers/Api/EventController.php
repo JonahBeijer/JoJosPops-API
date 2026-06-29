@@ -54,7 +54,7 @@ class EventController extends Controller
         $query = Pop::query();
         $query = $this->applyEventVisibility($query, $user, true);
 
-        $events = $query->with(['user' => function($query) {
+        $events = $query->with(['user' => function ($query) {
             $query->select('id', 'name', 'username', 'profile_image');
         }])
             ->orderBy('date', 'asc')
@@ -69,7 +69,7 @@ class EventController extends Controller
 
     public function show(Request $request, $id)
     {
-        $event = Pop::with(['user' => function($query) {
+        $event = Pop::with(['user' => function ($query) {
             $query->select('id', 'name', 'username', 'profile_image');
         }])->findOrFail($id);
 
@@ -101,7 +101,7 @@ class EventController extends Controller
         }
 
         if (!$event->is_active) {
-            return response()->json(['message' => 'Dit event is niet meer actief.'], 403);
+            return response()->json(['message' => 'This event is no longer active.'], 403);
         }
 
         $revealTime = Carbon::parse($event->reveal_time);
@@ -131,11 +131,12 @@ class EventController extends Controller
                 } else {
                     $q->whereRaw('0 = 1');
                 }
+
                 $q->orWhereHas('requests', function ($reqQuery) use ($user) {
                     $reqQuery->where('user_id', $user->id);
                 });
             })
-            ->with(['user' => function($q) {
+            ->with(['user' => function ($q) {
                 $q->select('id', 'name', 'username', 'profile_image');
             }]);
 
@@ -149,7 +150,7 @@ class EventController extends Controller
             $query->orderBy('date', 'asc');
         }
 
-        $events = $query->get()->map(function($event) {
+        $events = $query->get()->map(function ($event) {
             return $this->maskSensitiveData($event);
         });
 
@@ -168,14 +169,14 @@ class EventController extends Controller
         $query = $this->applyEventVisibility($query, $user, true);
 
         $pops = $query->select('*')
-            ->with(['user' => function($query) {
+            ->with(['user' => function ($query) {
                 $query->select('id', 'name', 'username', 'profile_image');
             }])
             ->selectRaw("(6371 * acos( cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)) )) AS distance", [$request->lat, $request->lng, $request->lat])
             ->having("distance", "<", $request->radius ?? 10)
             ->orderBy("distance")
             ->get()
-            ->map(function($event) {
+            ->map(function ($event) {
                 return $this->maskSensitiveData($event);
             })
             ->all();
@@ -191,7 +192,7 @@ class EventController extends Controller
             ->findOrFail($id);
 
         if (!$pop->is_ticketed || !$pop->ticket_price) {
-            return response()->json(['message' => 'Dit event is gratis of heeft geen geldige prijs.'], 400);
+            return response()->json(['message' => 'This event is free or does not have a valid ticket price.'], 400);
         }
 
         Stripe::setApiKey(env('STRIPE_SECRET'));
@@ -200,11 +201,17 @@ class EventController extends Controller
             $paymentIntent = PaymentIntent::create([
                 'amount' => (int) round($pop->ticket_price * 100),
                 'currency' => 'eur',
-                'automatic_payment_methods' => ['enabled' => true],
+                'payment_method_types' => ['card', 'ideal'],
             ]);
-            return response()->json(['paymentIntent' => $paymentIntent->client_secret], 200);
+
+            return response()->json([
+                'paymentIntent' => $paymentIntent->client_secret
+            ], 200);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Fout bij het opzetten van de betaling.', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'message' => 'Failed to initialize the payment.',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -242,14 +249,14 @@ class EventController extends Controller
         $keptImages = $request->input('kept_images', []);
 
         foreach (array_diff($oldImages, $keptImages) as $oldPath) {
-            Storage::disk('sftp')->delete($oldPath); // Aangepast naar SFTP
+            Storage::disk('sftp')->delete($oldPath);
         }
 
         $finalImages = $keptImages;
 
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $file) {
-                $finalImages[] = $file->store('pops', 'sftp'); // Aangepast naar SFTP
+                $finalImages[] = $file->store('pops', 'sftp');
             }
         }
 
@@ -262,7 +269,10 @@ class EventController extends Controller
 
         $pop->update($validated);
 
-        return response()->json(['message' => 'Pop-up successfully updated! ✏️', 'event' => $pop]);
+        return response()->json([
+            'message' => 'Pop-up successfully updated.',
+            'event' => $pop
+        ]);
     }
 
     public function destroy(Request $request, $id)
@@ -276,14 +286,22 @@ class EventController extends Controller
         try {
             if (!empty($pop->images)) {
                 $imagesArray = is_array($pop->images) ? $pop->images : (json_decode($pop->images, true) ?? []);
+
                 foreach ($imagesArray as $path) {
-                    Storage::disk('sftp')->delete($path); // Aangepast naar SFTP
+                    Storage::disk('sftp')->delete($path);
                 }
             }
+
             $pop->delete();
-            return response()->json(['message' => 'Pop-up successfully deleted! 🗑️'], 200);
+
+            return response()->json([
+                'message' => 'Pop-up successfully deleted.'
+            ], 200);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Failed to delete pop-up.', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'message' => 'Failed to delete pop-up.',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -315,9 +333,11 @@ class EventController extends Controller
 
         if ($request->hasFile('images')) {
             $storedPaths = [];
+
             foreach ($request->file('images') as $file) {
-                $storedPaths[] = $file->store('pops', 'sftp'); // Aangepast naar SFTP
+                $storedPaths[] = $file->store('pops', 'sftp');
             }
+
             $validated['images'] = $storedPaths;
         } else {
             $validated['images'] = [];
@@ -329,7 +349,10 @@ class EventController extends Controller
 
         $event = Pop::create($validated);
 
-        return response()->json(['message' => 'Pop-up successfully dropped! 🚀', 'event' => $event], 201);
+        return response()->json([
+            'message' => 'Pop-up successfully created.',
+            'event' => $event
+        ], 201);
     }
 
     private function maskSensitiveData($event)
@@ -343,29 +366,30 @@ class EventController extends Controller
         }
 
         $urls = [];
+
         if (!empty($event->images)) {
             $imagesArray = is_string($event->images) ? json_decode($event->images, true) : $event->images;
+
             if (is_array($imagesArray)) {
                 foreach ($imagesArray as $path) {
                     if ($path) {
-                        // 🔥 FIX: Verwijs naar onze eigen proxy-route in plaats van S3
                         $urls[] = url("/api/pops/image?path=" . urlencode($path));
                     }
                 }
             }
         }
+
         $event->image_urls = $urls;
 
         return $event;
     }
 
-    // 🔥 NIEUW: Omdat SFTP geen publieke URL's heeft, haalt Laravel ze hier op en stuurt ze naar de app
     public function serveImage(Request $request)
     {
         $path = $request->query('path');
 
         if (!$path || !Storage::disk('sftp')->exists($path)) {
-            return response()->json(['message' => 'Afbeelding niet gevonden op SFTP.'], 404);
+            return response()->json(['message' => 'Image not found.'], 404);
         }
 
         $file = Storage::disk('sftp')->get($path);

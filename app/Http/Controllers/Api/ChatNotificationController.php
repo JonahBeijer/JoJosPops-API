@@ -16,7 +16,6 @@ class ChatNotificationController extends Controller
 
     public function notify(Request $request)
     {
-        // 1. Valideer de inkomende data
         $request->validate([
             'receivers' => 'required|array',
             'message'   => 'required|string',
@@ -31,21 +30,24 @@ class ChatNotificationController extends Controller
         $chatId = $request->input('chat_id');
         $chatName = $request->input('chat_name');
 
-        // Groeps-specifieke data
         $isGroup = $request->input('is_group', false);
         $groupAvatar = $request->input('group_avatar');
-
-        $senderAvatar = $sender->profile_image;
         $receiverIds = $request->input('receivers');
 
-        $avatarUrl = $senderAvatar
-            ? url("/api/pops/image?path=" . urlencode($senderAvatar))
-            : null;
+        // 🔥 OPLOSSING: Check of het al een externe URL is, voorkom dubbele urls!
+        $avatarUrl = null;
+        if (!empty($sender->profile_image)) {
+            $avatarUrl = filter_var($sender->profile_image, FILTER_VALIDATE_URL)
+                ? $sender->profile_image
+                : url("/api/pops/image?path=" . urlencode($sender->profile_image));
+        }
 
-        // Maak de avatar URL voor de groep ook publiek toegankelijk (als deze bestaat)
-        $groupAvatarUrl = $groupAvatar
-            ? url("/api/pops/image?path=" . urlencode($groupAvatar))
-            : null;
+        $groupAvatarUrl = null;
+        if (!empty($groupAvatar)) {
+            $groupAvatarUrl = filter_var($groupAvatar, FILTER_VALIDATE_URL)
+                ? $groupAvatar
+                : url("/api/pops/image?path=" . urlencode($groupAvatar));
+        }
 
         $usersToNotify = User::whereIn('id', $receiverIds)
             ->whereNotNull('device_token')
@@ -56,14 +58,12 @@ class ChatNotificationController extends Controller
                 $cleanToken = trim($user->device_token);
                 if (empty($cleanToken)) continue;
 
-                // 🔥 Hier voegen we de groep-data toe aan de payload
-                // In ChatNotificationController.php (rond regel 54)
                 $payload = [
                     'title'        => (string) $chatName,
                     'body'         => (string) $message,
                     'type'         => 'chat',
                     'chat_id'      => (string) $chatId,
-                    'sender_id'    => (string) $sender->id, // 🟢 VOEG DEZE TOE
+                    'sender_id'    => (string) $sender->id,
                     'sender_name'  => (string) $sender->name,
                     'avatar_url'   => (string) $avatarUrl,
                     'is_group'     => $isGroup ? 'true' : 'false',
@@ -73,7 +73,7 @@ class ChatNotificationController extends Controller
 
                 $this->firebase->send($cleanToken, $payload);
             } catch (\Exception $e) {
-                \Log::error("Fout bij verzenden push notificatie naar User ID {$user->id}: " . $e->getMessage());
+                Log::error("Fout bij verzenden push notificatie naar User ID {$user->id}: " . $e->getMessage());
             }
         }
 

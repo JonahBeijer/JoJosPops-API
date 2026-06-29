@@ -16,57 +16,61 @@ class ChatNotificationController extends Controller
 
     public function notify(Request $request)
     {
-        // 1. Veiligheid eerst: valideer de inkomende data
+        // 1. Valideer de inkomende data
         $request->validate([
             'receivers' => 'required|array',
             'message'   => 'required|string',
             'chat_id'   => 'required',
-            'chat_name' => 'required|string'
+            'chat_name' => 'required|string',
+            'is_group'  => 'boolean',        // 🔥 Nieuw
+            'group_avatar' => 'nullable|string' // 🔥 Nieuw
         ]);
 
         $sender = $request->user();
-
         $message = $request->input('message');
         $chatId = $request->input('chat_id');
         $chatName = $request->input('chat_name');
+
+        // Groeps-specifieke data
+        $isGroup = $request->input('is_group', false);
+        $groupAvatar = $request->input('group_avatar');
+
         $senderAvatar = $sender->profile_image;
         $receiverIds = $request->input('receivers');
 
-        // 2. 🔥 Zet de TransIP SFTP pad-string om in een publieke proxy URL voor Notifee
         $avatarUrl = $senderAvatar
             ? url("/api/pops/image?path=" . urlencode($senderAvatar))
             : null;
 
-        // 3. Haal alleen de ontvangers op die push notificaties aan hebben staan (een token hebben)
+        // Maak de avatar URL voor de groep ook publiek toegankelijk (als deze bestaat)
+        $groupAvatarUrl = $groupAvatar
+            ? url("/api/pops/image?path=" . urlencode($groupAvatar))
+            : null;
+
         $usersToNotify = User::whereIn('id', $receiverIds)
             ->whereNotNull('device_token')
             ->get();
 
-        // 4. Stuur de data-only payload via Firebase Cloud Messaging
         foreach ($usersToNotify as $user) {
             try {
                 $cleanToken = trim($user->device_token);
+                if (empty($cleanToken)) continue;
 
-                if (empty($cleanToken)) {
-                    continue;
-                }
+                // 🔥 Hier voegen we de groep-data toe aan de payload
+                $payload = [
+                    'title'        => (string) $chatName,
+                    'body'         => (string) $message,
+                    'type'         => 'chat',
+                    'chat_id'      => (string) $chatId,
+                    'sender_name'  => (string) $sender->name,
+                    'avatar_url'   => (string) $avatarUrl,
+                    'is_group'     => $isGroup ? 'true' : 'false',
+                    'group_name'   => (string) $chatName,
+                    'group_avatar' => (string) $groupAvatarUrl,
+                ];
 
-                // 🔥 DEBUG LOG: Dit vertelt ons exact wat er naar Firebase gaat
-                \Log::info("DEBUG - Verzenden FCM naar User ID {$user->id} met token: '{$cleanToken}'");
-
-                $this->firebase->send(
-                    $cleanToken,
-                    [
-                        'title'       => (string) $chatName,
-                        'body'        => (string) $message,
-                        'type'        => 'chat',
-                        'chat_id'     => (string) $chatId,
-                        'sender_name' => (string) $sender->name,
-                        'avatar_url'  => (string) $avatarUrl,
-                    ]
-                );
+                $this->firebase->send($cleanToken, $payload);
             } catch (\Exception $e) {
-                // Log de fout inclusief de respons van Firebase
                 \Log::error("Fout bij verzenden push notificatie naar User ID {$user->id}: " . $e->getMessage());
             }
         }

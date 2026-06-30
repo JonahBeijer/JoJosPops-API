@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Models\User;
 use App\Models\Pop;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\JsonResponse;
@@ -112,6 +113,43 @@ class ProfileController extends Controller
         $user->save();
 
         return response()->json(['message' => 'Status synchronized', 'is_premium' => $user->is_premium]);
+    }
+
+    public function showUser(Request $request, $id): JsonResponse
+    {
+        $user = User::find($id);
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'User not found.'
+            ], 404);
+        }
+
+        $myPops = Pop::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->orderBy('date', 'desc')
+            ->get();
+
+        $goingPops = Pop::whereHas('requests', function ($query) use ($user) {
+            $query->where('user_id', $user->id)
+                ->whereIn('status', ['accepted', 'paid']);
+        })
+            ->where('is_active', true)
+            ->orderBy('date', 'asc')
+            ->get();
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'username' => $user->username,
+                'profile_image' => $user->profile_image
+                    ? url("/api/pops/image?path=" . urlencode($user->profile_image))
+                    : null,
+            ],
+            'my_pops' => $myPops,
+            'going' => $goingPops,
+        ], 200);
     }
 
     /**

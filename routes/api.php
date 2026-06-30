@@ -60,7 +60,7 @@ Route::get('/place-details', function (Request $request) {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/chat/notify', [ChatNotificationController::class, 'notify']);
     Route::get('/pops/fyp', [EventController::class, 'fypFeed']);
-
+    Route::get('/users/{id}', [ProfileController::class, 'showUser']);
     Route::get('/user', function (Request $request) {
         return response()->json($request->user());
     });

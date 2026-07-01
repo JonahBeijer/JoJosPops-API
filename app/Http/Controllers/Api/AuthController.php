@@ -129,27 +129,35 @@ class AuthController extends Controller
             'password' => 'required|string|min:8'
         ]);
 
+        // 1. Genereer een random 6-cijferige verificatiecode
+        $otp = rand(100000, 999999);
+
+        // 2. Maak de gebruiker aan met de gehashte code en verloooptijd (net als bij login)
         $user = User::create([
             'name' => $request->name,
             'username' => $request->username,
             'email' => $request->email,
-            'password' => Hash::make($request->password)
+            'password' => Hash::make($request->password),
+            'otp_code' => Hash::make($otp),
+            'otp_expires_at' => now()->addMinutes(15) // 15 minuten de tijd om te registreren
         ]);
 
-        // Send welcome email
+        // 3. Stuur de mail met de code erin
         try {
             $this->sendMailgun(
                 $user->email,
-                "Welcome to JoJo's Pops!",
-                "Hi {$user->name}, welcome to the community! Your account has been successfully created."
+                "Welcome to JoJo's Pops! Verify your account",
+                "Hi {$user->name}, welcome to the community! Your verification code is: {$otp}. This code is valid for 15 minutes."
             );
         } catch (\Exception $e) {
             Log::error("Mail at registration failed: " . $e->getMessage());
         }
 
+        // 4. Geef de code (en eventueel GEEN token als ze eerst moeten verifiëren) terug in de respons
         return response()->json([
-            'message' => 'Account successfully created.',
-            'access_token' => $user->createToken('app_auth_token')->plainTextToken,
+            'message' => 'Account successfully created. Please verify with the code sent to your email.',
+            'code' => $otp, // Handig voor testen/frontend
+            'requires_verification' => true,
             'user' => $user
         ], 201);
     }
@@ -171,10 +179,8 @@ class AuthController extends Controller
         $from = env('MAIL_FROM_ADDRESS');
         $name = env('MAIL_FROM_NAME');
 
-        // Get the correct endpoint (and use the US server as fallback)
         $endpoint = env('MAILGUN_ENDPOINT', 'api.mailgun.net');
 
-        // Check if essential configuration is present
         if (!$domain || !$secret || !$from) {
             Log::error('Mailgun configuration missing in .env');
             return false;

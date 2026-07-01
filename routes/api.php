@@ -21,7 +21,7 @@ Route::get('/pops', [EventController::class, 'index']);
 Route::get('/pops/image', [EventController::class, 'serveImage']);
 // Authenticatie & Registratie
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/verify-otp', [AuthController::class, 'verifyOtp']); // ✅ Staat goed!
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-registration', [AuthController::class, 'verifyRegistration']);
 
@@ -104,5 +104,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/friends/remove', [FriendshipController::class, 'removeFriend']);
 });
 
-// Zorg dat deze onderaan staat, anders vangt hij 'nearby' of 'fyp' af als ID
 Route::get('/pops/{id}', [EventController::class, 'show']);

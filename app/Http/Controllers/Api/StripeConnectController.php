@@ -17,10 +17,8 @@ class StripeConnectController extends Controller
         // Haal het land uit de request, met 'NL' als veilige fallback
         $countryCode = $request->input('country', 'NL');
 
-        Stripe::setApiKey(env('STRIPE_SECRET'));
+        Stripe::setApiKey(config('services.stripe.secret'));
 
-        // FIX: Gebruik de nieuwste API versie om de ErrorException te voorkomen
-        Stripe::setApiVersion('2026-06-24.dahlia');
 
         // 1. Maak een Express account aan als de gebruiker er nog geen heeft
         if (!$user->stripe_account_id) {

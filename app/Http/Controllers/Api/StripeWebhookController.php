@@ -13,35 +13,30 @@ class StripeWebhookController extends Controller
 {
     public function handle(Request $request)
     {
-        Stripe::setApiKey(env('STRIPE_SECRET'));
+        Stripe::setApiKey(config('services.stripe.secret'));
 
-        // FIX: Laravel request methodes in plaats van ruwe PHP functies
         $payload = $request->getContent();
-        $sig_header = $request->header('Stripe-Signature');
-        $endpoint_secret = config('services.stripe.webhook_secret');
+        $sigHeader = $request->header('Stripe-Signature');
+        $endpointSecret = config('services.stripe.webhook_secret');
+
         try {
-            $event = Webhook::constructEvent($payload, $sig_header, $endpoint_secret);
+            $event = Webhook::constructEvent($payload, $sigHeader, $endpointSecret);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Webhook signature verification failed'], 400);
+            Log::error('Stripe webhook verification failed: ' . $e->getMessage());
+
+            return response()->json([
+                'error' => 'Webhook signature verification failed',
+            ], 400);
         }
 
-        // We luisteren naar het event wanneer een account geüpdatet is
         if ($event->type === 'account.updated') {
             $stripeAccount = $event->data->object;
 
             $user = User::where('stripe_account_id', $stripeAccount->id)->first();
 
             if ($user) {
-                // Update de status in je database
                 $user->stripe_payouts_enabled = $stripeAccount->payouts_enabled;
                 $user->save();
-            }
-            try {
-                $event = \Stripe\Webhook::constructEvent($payload, $sig_header, $endpoint_secret);
-            } catch (\Exception $e) {
-                // Dit logt de exacte reden waarom Stripe de payload weigert in storage/logs/laravel.log
-                Log::error('Stripe Webhook Verificatie Mislukt: ' . $e->getMessage());
-                return response()->json(['error' => 'Webhook signature verification failed'], 400);
             }
         }
 

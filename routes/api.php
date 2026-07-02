@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\EventRequestController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\StripeConnectController;
+use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Settings\ProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -16,7 +17,7 @@ use App\Http\Controllers\Api\FriendshipController;
 // ==========================================
 // PUBLIEKE ROUTES (Geen login vereist)
 // ==========================================
-Route::post('/stripe/webhook', [App\Http\Controllers\Api\StripeWebhookController::class, 'handle']);
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/stripe/connect', [StripeConnectController::class, 'connect']);

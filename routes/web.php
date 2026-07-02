@@ -115,5 +115,9 @@ Route::get('/sitemap.xml', function () {
         ->header('Content-Type', 'text/xml');
 });
 
+Route::get('/stripe/success', function () {
+    return "Bankgegevens succesvol gekoppeld! Je kunt dit venster sluiten.";
+});
+
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

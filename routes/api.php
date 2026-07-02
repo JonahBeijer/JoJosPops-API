@@ -16,6 +16,11 @@ use App\Http\Controllers\Api\FriendshipController;
 // PUBLIEKE ROUTES (Geen login vereist)
 // ==========================================
 
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/stripe/connect', [StripeConnectController::class, 'connect']);
+    Route::get('/stripe/status', [StripeConnectController::class, 'checkStatus']);
+});
+
 Route::get('/pops/nearby', [EventController::class, 'nearby']);
 Route::get('/pops', [EventController::class, 'index']);
 Route::get('/pops/image', [EventController::class, 'serveImage']);

@@ -184,6 +184,7 @@ class EventController extends Controller
         return response()->json($pops);
     }
 
+    // 🔥 DEZE METHODE IS AANGEPAST VOOR STRIPE CONNECT
     public function buyTicket(Request $request, $id)
     {
         $pop = Pop::where('is_active', true)
@@ -195,13 +196,31 @@ class EventController extends Controller
             return response()->json(['message' => 'This event is free or does not have a valid ticket price.'], 400);
         }
 
+        // Check of de host Stripe Connect heeft afgerond
+        if (!$pop->user->stripe_account_id || !$pop->user->stripe_payouts_enabled) {
+            return response()->json(['message' => 'The host is not ready to receive payments yet.'], 400);
+        }
+
         Stripe::setApiKey(env('STRIPE_SECRET'));
+
+        $totalAmountCents = (int) round($pop->ticket_price * 100);
+
+        // Bereken 10% commissie (voor jouw platform)
+        $applicationFeeCents = (int) round($totalAmountCents * 0.10);
 
         try {
             $paymentIntent = PaymentIntent::create([
-                'amount' => (int) round($pop->ticket_price * 100),
+                'amount' => $totalAmountCents,
                 'currency' => 'eur',
-                'payment_method_types' => ['card', 'ideal'],
+                'payment_method_types' => ['card', 'ideal'], // Of wat je maar ondersteunt
+
+                // Jouw 10% fee
+                'application_fee_amount' => $applicationFeeCents,
+
+                // De overige 90% gaat automatisch naar de Stripe account van de host
+                'transfer_data' => [
+                    'destination' => $pop->user->stripe_account_id,
+                ],
             ]);
 
             return response()->json([

@@ -21,15 +21,22 @@ class StripeConnectController extends Controller
 
         // 1. Maak een Express account aan als de gebruiker er nog geen heeft
         if (!$user->stripe_account_id) {
+
+            // 💡 FIX: Onderdruk tijdelijk de Stripe waarschuwing voor V2 API
+            set_error_handler(function () { return true; }, E_USER_WARNING);
+
             $account = \Stripe\Account::create([
                 'type' => 'express',
-                'country' => strtoupper($countryCode), // Zorg dat het altijd hoofdletters is (bijv. NL, BE, US)
+                'country' => strtoupper($countryCode),
                 'email' => $user->email,
                 'capabilities' => [
                     'card_payments' => ['requested' => true],
                     'transfers' => ['requested' => true],
                 ],
             ]);
+
+            // 💡 FIX: Herstel normale foutafhandeling
+            restore_error_handler();
 
             $user->stripe_account_id = $account->id;
             $user->save();

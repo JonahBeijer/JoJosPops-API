@@ -20,7 +20,7 @@ use App\Http\Controllers\Api\FriendshipController;
 
 
 
-Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
+Route::post('stripe/webhook', [StripeWebhookController::class, 'handle']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/stripe/connect', [StripeConnectController::class, 'connect']);

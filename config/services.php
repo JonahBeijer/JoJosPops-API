@@ -26,6 +26,10 @@ return [
         'client_id'             => env('FIREBASE_CLIENT_ID'),
         'client_x509_cert_url'  => env('FIREBASE_CLIENT_X509_CERT_URL'),
     ],
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
 
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),

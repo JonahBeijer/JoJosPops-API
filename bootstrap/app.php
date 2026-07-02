@@ -23,7 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Jouw eventuele middleware configuratie
+        // Voeg deze regel toe om je webhook expliciet uit te zonderen van CSRF
+        $middleware->validateCsrfTokens(except: [
+            'api/stripe/webhook',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // Jouw eventuele exceptions configuratie

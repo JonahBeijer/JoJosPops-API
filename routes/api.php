@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\FriendshipController;
 // ==========================================
 // PUBLIEKE ROUTES (Geen login vereist)
 // ==========================================
+Route::post('/stripe/webhook', [App\Http\Controllers\Api\StripeWebhookController::class, 'handle']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/stripe/connect', [StripeConnectController::class, 'connect']);

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\ChatNotificationController;
 use App\Http\Controllers\Api\EventRequestController;
 use App\Http\Controllers\Api\FollowController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\StripeConnectController;
 use App\Http\Controllers\Settings\ProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;

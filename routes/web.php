@@ -115,8 +115,13 @@ Route::get('/sitemap.xml', function () {
         ->header('Content-Type', 'text/xml');
 });
 
+
 Route::get('/stripe/success', function () {
-    return "Bankgegevens succesvol gekoppeld! Je kunt dit venster sluiten.";
+    return redirect('jojopops://stripe/success');
+});
+
+Route::get('/stripe/refresh', function () {
+    return redirect('jojopops://stripe/refresh');
 });
 
 require __DIR__.'/settings.php';

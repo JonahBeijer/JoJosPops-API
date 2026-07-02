@@ -16,16 +16,14 @@ return Application::configure(basePath: dirname(__DIR__))
             // 2. API Routes (api.jojospops.com)
             Route::middleware('api')
                 ->domain(env('API_DOMAIN', 'api.jojospops.com'))
-                ->prefix('api') // Behoudt de /api/ prefix zodat je app code blijft werken!
+                ->prefix('api')
                 ->group(base_path('routes/api.php'));
         },
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->validateCsrfTokens(except: [
-            'api/stripe/webhook', // Dit moet overeenkomen met de volledige URL na het domein
-        ]);
+        // CSRF uitzondering voor API is niet nodig, Laravel negeert dit standaard voor /api routes.
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // Jouw eventuele exceptions configuratie

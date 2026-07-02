@@ -13,8 +13,10 @@ class StripeWebhookController extends Controller
     public function handle(Request $request)
     {
         Stripe::setApiKey(env('STRIPE_SECRET'));
-        $payload = @file_get_contents('php://input');
-        $sig_header = $_SERVER['HTTP_STRIPE_SIGNATURE'];
+
+        // FIX: Laravel request methodes in plaats van ruwe PHP functies
+        $payload = $request->getContent();
+        $sig_header = $request->header('Stripe-Signature');
         $endpoint_secret = env('STRIPE_WEBHOOK_SECRET');
 
         try {

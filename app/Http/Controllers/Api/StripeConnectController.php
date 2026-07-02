@@ -18,14 +18,14 @@ class StripeConnectController extends Controller
         $countryCode = $request->input('country', 'NL');
 
         Stripe::setApiKey(env('STRIPE_SECRET'));
+        // FIX: Geef de juiste API versie mee om V2 waarschuwingen te voorkomen.
+        // Tip: Controleer je Stripe Dashboard voor de exacte versie die daar staat, bijv: '2023-10-16'
+        Stripe::setApiVersion('2023-10-16');
 
         // 1. Maak een Express account aan als de gebruiker er nog geen heeft
         if (!$user->stripe_account_id) {
 
-            // 💡 FIX: Onderdruk tijdelijk de Stripe waarschuwing voor V2 API
-            set_error_handler(function () { return true; }, E_USER_WARNING);
-
-            $account = \Stripe\Account::create([
+            $account = Account::create([
                 'type' => 'express',
                 'country' => strtoupper($countryCode),
                 'email' => $user->email,
@@ -35,16 +35,11 @@ class StripeConnectController extends Controller
                 ],
             ]);
 
-            // 💡 FIX: Herstel normale foutafhandeling
-            restore_error_handler();
-
             $user->stripe_account_id = $account->id;
             $user->save();
         }
 
         // 2. Genereer de unieke URL
-        // 2. Genereer de unieke URL
-        // Zorg dat deze URL's overeenkomen met waar de routes nu staan
         $accountLink = AccountLink::create([
             'account' => $user->stripe_account_id,
             'refresh_url' => 'https://jojospops.com/stripe/refresh',

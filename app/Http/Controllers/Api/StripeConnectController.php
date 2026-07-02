@@ -43,10 +43,11 @@ class StripeConnectController extends Controller
         }
 
         // 2. Genereer de unieke URL
+        // 2. Genereer de unieke URL
         $accountLink = AccountLink::create([
             'account' => $user->stripe_account_id,
-            'refresh_url' => 'https://jojospops.com/stripe/refresh',
-            'return_url' => 'jojopops://stripe/success',
+            'refresh_url' => 'https://jojospops.com/api/stripe/refresh',
+            'return_url' => 'https://jojospops.com/api/stripe/success', // We maken deze route zo aan
             'type' => 'account_onboarding',
         ]);
 

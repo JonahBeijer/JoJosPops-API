@@ -17,6 +17,16 @@ use App\Http\Controllers\Api\FriendshipController;
 // ==========================================
 // PUBLIEKE ROUTES (Geen login vereist)
 // ==========================================
+
+// Voeg dit toe in routes/api.php
+Route::get('/stripe/success', function () {
+    return redirect('jojopops://stripe/success');
+});
+
+Route::get('/stripe/refresh', function () {
+    return redirect('jojopops://stripe/refresh');
+});
+
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
 Route::middleware('auth:sanctum')->group(function () {

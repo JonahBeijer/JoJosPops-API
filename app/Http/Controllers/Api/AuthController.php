@@ -117,6 +117,41 @@ class AuthController extends Controller
     }
 
     // ==========================================
+    // REGISTRATION VERIFICATION
+    // ==========================================
+
+    public function verifyRegistration(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required'
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        // Controleer of gebruiker bestaat, de code klopt en niet verlopen is
+        if (!$user || !$user->otp_code || !Hash::check($request->code, $user->otp_code) || now()->gt($user->otp_expires_at)) {
+            return response()->json(['message' => 'Code incorrect or expired.'], 422);
+        }
+
+        // Code klopt! Reset de OTP velden (en markeer eventueel email als geverifieerd)
+        $user->update([
+            'otp_code' => null,
+            'otp_expires_at' => null,
+            'email_verified_at' => now(), // Optioneel, maar netjes in Laravel
+        ]);
+
+        // Genereer de token zodat de app direct kan inloggen (zoals verwacht in de React Native code)
+        $token = $user->createToken('app_auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Account successfully verified!',
+            'access_token' => $token,
+            'user' => $user
+        ], 200);
+    }
+
+    // ==========================================
     // 3. REGISTER & LOGOUT
     // ==========================================
 

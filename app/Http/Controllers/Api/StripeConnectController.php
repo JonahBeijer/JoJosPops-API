@@ -71,5 +71,13 @@ class StripeConnectController extends Controller
         return response()->json([
             'payouts_enabled' => $account->payouts_enabled
         ]);
+        $account = Account::retrieve($user->stripe_account_id);
+
+        dd([
+            'details_submitted' => $account->details_submitted,
+            'charges_enabled' => $account->charges_enabled,
+            'payouts_enabled' => $account->payouts_enabled,
+            'requirements' => $account->requirements,
+        ]);
     }
 }

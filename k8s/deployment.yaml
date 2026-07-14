@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jojospops-api
+  labels:
+    app: jojospops-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: jojospops-api
+  template:
+    metadata:
+      labels:
+        app: jojospops-api
+    spec:
+      containers:
+        - name: api
+          image: your-registry/jojospops-api:latest
+          ports:
+            - containerPort: 9000
+          env:
+            # ── OpenTelemetry ──────────────────────────────────────────────────
+            # Enable the PHP auto-instrumentation extension hook
+            - name: OTEL_PHP_AUTOLOAD_ENABLED
+              value: "true"
+            # Service identity shown in Dash0 traces
+            - name: OTEL_SERVICE_NAME
+              value: "jojospops-api"
+            - name: OTEL_SERVICE_VERSION
+              value: "1.0.0"
+            # Dash0 OTLP gRPC ingress.
+            # Replace <region> with your region (e.g. eu-west-1, us-east-1).
+            # Find the exact URL under Dash0 Settings → Endpoints.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "https://ingress.<region>.aws.dash0.com:4317"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            # Dash0 auth token, injected from the dash0-auth Secret (see secret.yaml.example)
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: dash0-auth
+                  key: otlp-headers
+            - name: OTEL_PROPAGATORS
+              value: "tracecontext,baggage"
+            - name: OTEL_TRACES_SAMPLER
+              value: "parentbased_always_on"
+            # ── Laravel ───────────────────────────────────────────────────────
+            - name: APP_ENV
+              value: "production"
+            - name: APP_DEBUG
+              value: "false"
+            - name: APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: app-key
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jojospops-api
+spec:
+  selector:
+    app: jojospops-api
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000
